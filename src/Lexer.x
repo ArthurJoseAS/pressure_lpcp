@@ -65,7 +65,6 @@ tokens :-
 
 -- The token type:
 data Token =
-  Let AlexPosn        |
   IntLiteral AlexPosn Int    |
   OpenPar AlexPosn   |
   ClosePar AlexPosn  |
@@ -105,7 +104,6 @@ data Token =
   TokenNot AlexPosn     |
   Equal AlexPosn        |
   Id AlexPosn String    |
-  Int AlexPosn Int       |
   Colon AlexPosn        |
   Comma AlexPosn        |
   Semicolon AlexPosn    |

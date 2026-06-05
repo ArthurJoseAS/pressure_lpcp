@@ -1,10 +1,12 @@
 {- HLINT ignore "Use newtype instead of data" -}
-module Parser () where
+{- HLINT ignore "Eta reduce" -}
+module Parser (parser) where
 import Lexer (Token(..), AlexPosn(..))
 import Text.Parsec
+import ParserHelpers.Terminals
 
--- parsers para os terminais
---declaração da variavel vai ter nome, possivelmente tipo e possivelmente valor inicial
+
+
 data VarDecl = VarDecl{
         varId :: String,
         varType :: Maybe String,
@@ -34,16 +36,32 @@ data GlobalDeclType
 
 parseGlobalDecl :: Parsec [Token] st [GlobalDeclType]
 parseGlobalDecl = do
-    global_declarations <- many (try parseGlobalVar <|> try parseGlobalFn <|> parseFnMain)
+    global_declarations <- many (
+        try parseGlobalVar
+        -- try parseGlobalFn <|> parseFnMain
+         )
     eof
     return global_declarations
 
-parseGlobalVar :: Parsec [Token] st VarDecl
+parseGlobalVar :: Parsec [Token] st GlobalDeclType
 parseGlobalVar = do 
+    _ <- letP 
+    name <- idP
+    vartype <- optionMaybe (do 
+            _ <- colonP
+            idP
+        )
+    initval <- optionMaybe (do
+                _ <- equalP
+                intLitP
+            )
+    _ <- semicolonP
+
+    return  (GlobalVar (VarDecl name vartype initval))
 
 
 -- invocação do parser para o símbolo de partida 
 
-parser :: [Token] -> Either ParseError [Token]
-parser tokens = runParser program () "Error message" tokens
+parser :: [Token] -> Either ParseError [GlobalDeclType]
+parser tokens = runParser parseGlobalDecl () "Error message" tokens
 

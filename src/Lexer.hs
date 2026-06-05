@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-missing-signatures #-}
 {-# LANGUAGE CPP #-}
-{-# LINE 1 "src/Lexer.x" #-}
+{-# LINE 1 "Lexer.x" #-}
 module Lexer (tokenize, Token(..), AlexPosn(..), alexScanTokens, token_posn) where
 #if __GLASGOW_HASKELL__ >= 603
 #include "ghcconfig.h"
@@ -15975,13 +15975,12 @@ alexRightContext IBOX(sc) user__ _ _ input__ =
         -- match when checking the right context, just
         -- the first match will do.
 #endif
-{-# LINE 62 "src/Lexer.x" #-}
+{-# LINE 62 "Lexer.x" #-}
 -- Each right-hand side has type :: AlexPosn -> String -> Token
 -- Some action helpers:
 
 -- The token type:
 data Token =
-  Let AlexPosn        |
   IntLiteral AlexPosn Int    |
   OpenPar AlexPosn   |
   ClosePar AlexPosn  |
@@ -16021,7 +16020,6 @@ data Token =
   TokenNot AlexPosn     |
   Equal AlexPosn        |
   Id AlexPosn String    |
-  Int AlexPosn Int       |
   Colon AlexPosn        |
   Comma AlexPosn        |
   Semicolon AlexPosn    |

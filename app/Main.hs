@@ -2,6 +2,7 @@ module Main where
 import System.Environment
 -- import qualified Parser (someFunc)
 import Lexer (tokenize, token_posn)
+import Parser
 
 main :: IO ()
 main = do
@@ -11,4 +12,7 @@ main = do
   else do
     let filename = head args
     content <- readFile filename
-    mapM_ print (tokenize content) 
+    let tokens = tokenize content 
+    case parser tokens of
+      Left err -> print err
+      Right result -> print result

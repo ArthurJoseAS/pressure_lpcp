@@ -19,7 +19,8 @@ common warnings
 library
     exposed-modules:
         Parser,
-        Lexer
+        Lexer,
+        ParserHelpers.Terminals
     hs-source-dirs:
         src
     build-depends:
