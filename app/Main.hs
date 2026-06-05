@@ -15,4 +15,4 @@ main = do
     let tokens = tokenize content 
     case parser tokens of
       Left err -> print err
-      Right result -> print result
+      Right result -> mapM_ print result

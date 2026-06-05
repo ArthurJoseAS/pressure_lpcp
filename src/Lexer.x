@@ -11,6 +11,7 @@ tokens :-
 
   $white+                         ;
   "--".*.                         ;
+  main
   let                           { \p s -> TokenLet p }
   mut                           { \p s -> TokenMut p }
   if                            { \p s -> TokenIf p }
@@ -56,7 +57,7 @@ tokens :-
   \.\.                          { \p s -> DoubleDot p}
   \'                            {\p s -> SingleQuote p}
   \"                            {\p s -> DoubleQuote p}
-  $alpha [$alpha $digit \_ \']*	  { \p s -> Id p s }
+  [$alpha \_] [$alpha $digit \_ \']*	  { \p s -> Id p s }
   $digit+                    { \p s -> IntLiteral p (read s) }
 
 {
