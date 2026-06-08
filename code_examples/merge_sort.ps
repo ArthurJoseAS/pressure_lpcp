@@ -1,21 +1,17 @@
-fn main() {
-  let mut arr: [] u32 = [3,3,4,6,7,8];
-  mergeSort(u32, arr);
-}
-
-fn mergeSort(T: type, mut arr: [] T) {
+fn mergeSort(type : T , mut arr: [] T) {
   if (arr.len <= 1) {
-    return
-  };
+    return;
+  }
 
-  let mut temp_arr: []T = arr.copy();
-  let mut segment_size = 1;
+  let temp_arr: mut []T = arr.copy();
+  let segment_size: mut i32 = 1;
   while (segment_size < arr.len) {
-    let mut start = 0;
+    let start: mut i32 = 0;
     while (start < arr.len) {
       let mid = min(start + segment_size, arr.len);
       let end = min(start + 2 * segment_size, arr.len);
-      merge(temp_arr[start..end], arr[start..mid], arr[mid..end]);
+      
+      merge(T, temp_arr[start..end], arr[start..mid], arr[mid..end]);
       start = start + 2 * segment_size;
     }
     memcpy(arr, temp_arr);
@@ -23,9 +19,8 @@ fn mergeSort(T: type, mut arr: [] T) {
   }
 }
 
-fn merge(T: type, mut arr: [] T, left_arr: []T, right_arr: []T) {
-  //let (mut i, mut l, mut r) = (0, 0, 0);
-  let mut i = 0; let mut l = 0; let mut r = 0;
+fn merge(type : T, mut arr: [] T, left_arr: []T, right_arr: []T) {
+  let i: mut i32 = 0; let l: mut i32 = 0; let r: mut i32 = 0;
   while (l < left_arr.len and r < right_arr.len) {
     if (left_arr[l] < right_arr[r]) {
       arr[i] = left_arr[l];
@@ -39,11 +34,15 @@ fn merge(T: type, mut arr: [] T, left_arr: []T, right_arr: []T) {
   while (l < left_arr.len) {
     arr[i] = left_arr[l];
     i = i + 1;
-    l = i + 1;
   }
   while (r < right_arr.len) {
     arr[i] = right_arr[r];
     i = i + 1;
     r = r + 1;
   }
+}
+
+fn main() {
+  let arr: mut [] u32 = [3, 3, 4, 6, 7, 8];
+  mergeSort(u32, arr);
 }

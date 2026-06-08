@@ -1,3 +1,5 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts #-}
 {- HLINT ignore "Eta reduce" -}
 {- HLINT ignore "Use lambda-case" -}
 module ParserHelpers.Terminals where
@@ -6,7 +8,7 @@ import Text.Parsec
 import Text.Parsec.Pos
 
 --função para comparar tokens que o gemini fez
-matchToken :: (Token -> Maybe a) -> Parsec [Token] st a
+matchToken :: Monad m => (Token -> Maybe a) -> ParsecT [Token] st m a
 matchToken testFunc = tokenPrim show updatePosition testFunc
   where
     updatePosition :: SourcePos -> Token -> [Token] -> SourcePos
@@ -72,6 +74,12 @@ notP = matchToken (\t -> case t of
   _ -> Nothing)
   
 compSymbP = matchToken (\t -> case t of TokenCompSymb _ symb -> Just symb; _ -> Nothing)
+
+compOpP :: Monad m => ParsecT [Token] st m String
+compOpP = matchToken (\t -> case t of
+    TokenCompSymb _ symb | symb `elem` ["==", "!=", "<", ">", "<=", ">="] -> Just symb
+    _ -> Nothing)
+
 openBraceP = matchToken (\t -> case t of OpenBraces _ -> Just ();_ -> Nothing)
 
 closeBraceP = matchToken (\t -> case t of CloseBraces _ -> Just (); _ -> Nothing)
@@ -125,3 +133,14 @@ doubleDotP = matchToken (\t -> case t of { DoubleDot _ -> Just (); _ -> Nothing 
 singleQuoteP = matchToken (\t -> case t of { SingleQuote _ -> Just (); _ -> Nothing })
 
 doubleQuoteP = matchToken (\t -> case t of { DoubleQuote _ -> Just (); _ -> Nothing })
+
+floatLitP :: Monad m => ParsecT [Token] st m Double
+floatLitP = matchToken (\t -> case t of
+    FloatLiteral _ val -> Just val
+    _                  -> Nothing)
+
+boolLitP :: Monad m => ParsecT [Token] st m Bool
+boolLitP = matchToken (\t -> case t of
+    TokenTrue _  -> Just True
+    TokenFalse _ -> Just False
+    _            -> Nothing)

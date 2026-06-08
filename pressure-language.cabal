@@ -20,7 +20,7 @@ library
     exposed-modules:
         Parser,
         Lexer,
-        ParserHelpers.Terminals
+        ParserHelpers.Terminals,
     hs-source-dirs:
         src
     build-depends:

@@ -11,7 +11,6 @@ tokens :-
 
   $white+                         ;
   "--".*.                         ;
-  main
   let                           { \p s -> TokenLet p }
   mut                           { \p s -> TokenMut p }
   if                            { \p s -> TokenIf p }
@@ -55,10 +54,12 @@ tokens :-
   \;                            { \p s -> Semicolon p }
   \:                           { \p s -> Colon p }
   \.\.                          { \p s -> DoubleDot p}
+  \.\.\.                          { \p s -> TripleDot p}
   \'                            {\p s -> SingleQuote p}
   \"                            {\p s -> DoubleQuote p}
   [$alpha \_] [$alpha $digit \_ \']*	  { \p s -> Id p s }
   $digit+                    { \p s -> IntLiteral p (read s) }
+  $digit+ \. $digit+         { \p s -> FloatLiteral p (read s) }
 
 {
 -- Each right-hand side has type :: AlexPosn -> String -> Token
@@ -67,6 +68,7 @@ tokens :-
 -- The token type:
 data Token =
   IntLiteral AlexPosn Int    |
+  FloatLiteral AlexPosn Double |
   OpenPar AlexPosn   |
   ClosePar AlexPosn  |
   OpenBraces AlexPosn |
@@ -111,7 +113,8 @@ data Token =
   Dot AlexPosn          |
   SingleQuote AlexPosn |
   DoubleQuote AlexPosn |
-  DoubleDot AlexPosn
+  DoubleDot AlexPosn   |
+  TripleDot AlexPosn
   deriving (Eq,Show)
 
 token_posn :: Token -> AlexPosn
@@ -132,6 +135,7 @@ token_posn (TokenPub p)     = p
 token_posn (TokenEnum p)    = p
 token_posn (TokenIs p)      = p
 token_posn (IntLiteral p _)   = p
+token_posn (FloatLiteral p _) = p
 token_posn (OpenPar p)      = p
 token_posn (ClosePar p)     = p
 token_posn (OpenBraces p)   = p
