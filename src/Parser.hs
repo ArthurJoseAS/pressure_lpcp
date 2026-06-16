@@ -105,6 +105,7 @@ data BaseExpression
     | BaseSubCall String [Expr]       -- fn_name(args)
     | BaseLiteral Lit
     | BaseId String
+    | BaseStructInit String [(String, Expr)]
     deriving (Show, Eq)
 
 data DerivedExpression
@@ -150,6 +151,13 @@ data StructField = StructField
   { fieldName :: String
   , fieldType :: Type
   } deriving (Show, Eq)
+
+-- inicializacao da struct
+--data StructInit = StructInit
+--  { structInstanceName :: String,
+--    dName :: String
+--  , fieldType :: Type
+--  } deriving (Show, Eq)
 
 -- atributos de uma struct na tabela de símbolos
 data StructDefInfo = StructDefInfo
@@ -298,6 +306,27 @@ struct_field = do
   _            <- colonP           -- Consome o caractere ':'
   fType        <- typeRule         -- Chama a sua regra de tipos
   return (StructField { fieldName = fName, fieldType = fType })
+
+--  \<struct_init> → \<id> {\<struct_init_items>}  
+structInit :: ParsecT [Token] ParserState IO BaseExpression
+structInit = do
+  structName   <- idP              -- Captura o nome do struct
+  _            <- openBraceP       -- Chama a sua regra de tipos
+  structFields <- structInitItems
+  _            <- closeBraceP      -- Chama a sua regra de tipos
+  return (BaseStructInit structName structFields)
+
+--  \<struct_init_items> → \<struct_init_item> , <struct_init_items> | <struct_init_item> | #sym.epsilon
+structInitItems :: ParsecT [Token] ParserState IO [(String, Expr)]
+structInitItems = structInitItem `sepBy` commaP
+
+--  \<struct_init_item> → \<id> : <expr>
+structInitItem :: ParsecT [Token] ParserState IO (String, Expr)
+structInitItem = do 
+  fName <- idP
+  _     <- colonP
+  fVal  <- expr
+  return (fName, fVal)
 
 -- <subprogram> → fn <id>(<paramt_list>){statements} | fn <id>(<paramt_list>) <type> {statements}
 subprogram :: ParsecT [Token] ParserState IO FnDecl
@@ -577,6 +606,7 @@ baseExpression =
         _ <- closeParP
         return (BaseParen e)
       )
+  <|> try structInit
   <|> (fmap BaseArrayInit arrayInit)
   <|> try subCallBase
   <|> (fmap BaseLiteral literal)

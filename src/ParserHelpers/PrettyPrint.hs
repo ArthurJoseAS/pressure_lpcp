@@ -140,6 +140,7 @@ instance Show RootNode where
             BaseParen inner    -> makePrefix isLast ++ "├─ Parenthesized\n" ++ showExpr (depth + 1) (isLast ++ [True]) inner
             BaseArrayInit lits -> makePrefix isLast ++ "└─ ArrayInit: [" ++ interimLits lits ++ "]\n"
             BaseSubCall name args -> makePrefix isLast ++ "├─ Free Function Call: " ++ name ++ "\n" ++ makePrefix (isLast ++ [True]) ++ "└─ Args\n" ++ concatMap (showExpr (depth + 2) (isLast ++ [True, True])) args
+            BaseStructInit name fields -> makePrefix isLast ++ "├─ StructInit: " ++ name ++ "\n" ++ concatMap (\(fName, fVal) -> makePrefix (isLast ++ [True]) ++ "├─ Field: " ++ fName ++ "\n" ++ showExpr (depth + 2) (isLast ++ [True, True]) fVal) fields
           where interimLits = intercalate ", " . map showLit
 
         showLit :: Lit -> String
