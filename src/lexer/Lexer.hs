@@ -8,7 +8,9 @@ module Lexer
   ( Token(..)
   , Alex(..)
   , AlexPosn(..)
+  , alexError
   , alexMonadScan
+  , lexer
   , runAlex
   , tokenize
   , tokenizeEither
@@ -13680,7 +13682,7 @@ alexRightContext IBOX(sc) user__ _ _ input__ =
         -- match when checking the right context, just
         -- the first match will do.
 #endif
-{-# LINE 72 "src/lexer/Lexer.x" #-}
+{-# LINE 74 "src/lexer/Lexer.x" #-}
 data Token
   = TokenEOF
   | KwIf AlexPosn
@@ -13809,3 +13811,6 @@ tokenize input =
   case tokenizeEither input of
     Left err -> error err
     Right tokens -> tokens
+
+lexer :: (Token -> Alex a) -> Alex a
+lexer cont = alexMonadScan >>= cont

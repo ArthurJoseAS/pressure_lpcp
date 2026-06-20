@@ -1,13 +1,14 @@
 module Ast
   ( Program (..),
     TopLevel (..),
-    ReplInput (..),
+    Repl (..),
     Decl (..),
     Ident (..),
     Mutability (..),
     Type (..),
     BinaryOp (..),
     Expr (..),
+    Value (..),
   )
 where
 
@@ -16,11 +17,11 @@ import Lexer (AlexPosn)
 data Program = Program [TopLevel]
   deriving (Show, Eq)
 
-data TopLevel = TopLevelDecl Decl
+data TopLevel = TopLevelStmt Expr
   deriving (Show, Eq)
 
-data ReplInput
-  = ReplDecl Decl
+data Repl
+  = ReplStmt Expr
   | ReplExpr Expr
   deriving (Show, Eq)
 
@@ -39,10 +40,12 @@ data Type
   | BoolType AlexPosn
   | IntType AlexPosn
   | FloatType AlexPosn
+  | UnitType
   deriving (Show, Eq)
 
 data BinaryOp
   = AddOp
+  | SubOp
   | MulOp
   | DivOp
   deriving (Show, Eq)
@@ -52,17 +55,22 @@ data Expr
   | FloatLit AlexPosn Double
   | BoolLit AlexPosn Bool
   | BinaryExpr AlexPosn BinaryOp Expr Expr
+  | DeclExpr AlexPosn Decl
+  | VarExpr AlexPosn Ident
   deriving (Show, Eq)
 
 data Value
   = VInt Integer
   | VFloat Double
   | VBool Bool
-  deriving (Show, Eq)
+  | VUnit
+  | VEmpty
+  deriving (Eq)
 
-type Error = String
-
-evalExpr :: Expr -> Either Error Value
-evalExpr (IntLit _ i) = Right (VInt i)
-evalExpr (FloatLit _ f) = Right (VFloat f)
-evalExpr (BoolLit _ b) = Right (BoolLit b)
+instance Show Value where
+  show = \case
+    VInt i -> show i
+    VFloat f -> show f
+    VBool b -> show b
+    VUnit -> "()"
+    VEmpty -> undefined

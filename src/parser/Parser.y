@@ -1,13 +1,15 @@
 {
 module Parser where
 import Lexer
-import Ast
+import Ast 
 }
 
 %name parseRepl ReplInput
 %name parseProgram Program
 %tokentype { Token }
 %error { parseError }
+%monad { Alex }
+%lexer { lexer } { TokenEOF }
 
 %token
   if            { KwIf _ }
@@ -66,12 +68,10 @@ Program : TopLevels { Program $1 }
 TopLevels : TopLevel TopLevels { $1 : $2 }
           |                    { [] }
 
-TopLevel : Decl { TopLevelDecl $1 }
+TopLevel : Expr ';' { TopLevelStmt $1 }
 
-ReplInput : Decl { ReplDecl $1 }
+ReplInput : Expr ';' { ReplStmt $1 }
           | Expr { ReplExpr $1 }
-
-Decl : ValueDecl ';' { $1 }
 
 ValueDecl : ID ':' Type               { ValueDecl Mutable (toIdent $1) (Just $3) Nothing }
           | ID ':' OptType '=' Expr   { ValueDecl Mutable (toIdent $1) $3 (Just $5) }
@@ -87,9 +87,11 @@ TypeLit : bool  { BoolType (token_posn $1) }
         | int   { IntType (token_posn $1) }
         | float { FloatType (token_posn $1) }
 
-Expr : AddExpr { $1 }
+Expr : ValueDecl { DeclExpr (declPos $1) $1 }
+     | AddExpr { $1 }
 
 AddExpr : AddExpr '+' MulExpr { BinaryExpr (token_posn $2) AddOp $1 $3 }
+        | AddExpr '-' MulExpr { BinaryExpr (token_posn $2) SubOp $1 $3 }
         | MulExpr             { $1 }
 
 MulExpr : MulExpr '*' AtomExpr { BinaryExpr (token_posn $2) MulOp $1 $3 }
@@ -101,10 +103,14 @@ AtomExpr : INT_LITERAL   { toIntLit $1 }
          | true          { BoolLit (token_posn $1) True }
          | false         { BoolLit (token_posn $1) False }
          | '(' Expr ')'  { $2 }
+         | ID            { VarExpr (token_posn $1) (toIdent $1) }
 
 {
-parseError :: [Token] -> a
-parseError _ = error "parse error"
+parseError :: Token -> Alex a
+parseError tok =
+  let AlexPn _ line col = token_posn tok
+  in alexError $ "at " ++ show line ++ ":" ++ show col
+              ++ ": unexpected " ++ show tok
 
 toIdent :: Token -> Ident
 toIdent (Id pos name) = Ident pos name
@@ -117,4 +123,9 @@ toIntLit _ = error "internal parser error: expected integer literal"
 toFloatLit :: Token -> Expr
 toFloatLit (FloatLiteral pos value) = FloatLit pos value
 toFloatLit _ = error "internal parser error: expected float literal"
+
+declPos :: Decl -> AlexPosn
+declPos (ValueDecl _ (Ident pos _) _ _) = pos
+
+genAst = runAlex
 }

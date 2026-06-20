@@ -59,14 +59,19 @@ library
   import:           warnings
   exposed-modules:
     Ast
+    Eval
+    Lang
     Lexer
     Parser
+    Type
 
   build-depends:
     , array
-    , base   ^>=4.20.2.0
+    , base        ^>=4.20.2.0
+    , containers
+    , mtl
 
-  hs-source-dirs:   src src/ast src/lexer src/parser
+  hs-source-dirs:   src src/lexer src/parser
   default-language: GHC2024
 
 executable pressure-lang
@@ -85,10 +90,12 @@ executable pressure-lang
   -- Other library packages from which modules are imported.
   build-depends:
     , base           ^>=4.20.2.0
+    , containers
+    , mtl
     , pressure-lang
 
   -- Directories containing source files.
-  hs-source-dirs:   src
+  hs-source-dirs:   exe
 
   -- Base language which is written in.
   default-language: GHC2024
@@ -104,6 +111,8 @@ test-suite pressure-lang-test
 
   build-depends:
     , base           ^>=4.20.2.0
+    , containers
+    , mtl
     , pressure-lang
 
   hs-source-dirs:   test

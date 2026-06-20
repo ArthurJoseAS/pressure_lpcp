@@ -3,7 +3,9 @@ module Lexer
   ( Token(..)
   , Alex(..)
   , AlexPosn(..)
+  , alexError
   , alexMonadScan
+  , lexer
   , runAlex
   , tokenize
   , tokenizeEither
@@ -199,4 +201,7 @@ tokenize input =
   case tokenizeEither input of
     Left err -> error err
     Right tokens -> tokens
+
+lexer :: (Token -> Alex a) -> Alex a
+lexer cont = alexMonadScan >>= cont
 }
