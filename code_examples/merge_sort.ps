@@ -1,48 +1,48 @@
-fn mergeSort(type : T , mut arr: [] T) {
-  if (arr.len <= 1) {
-    return;
-  }
+merge :: fn(dest: []T, left, right: []int) {
+	i, l, r := 0, 0, 0
 
-  let temp_arr: mut []T = arr.copy();
-  let segment_size: mut i32 = 1;
-  while (segment_size < arr.len) {
-    let start: mut i32 = 0;
-    while (start < arr.len) {
-      let mid = min(start + segment_size, arr.len);
-      let end = min(start + 2 * segment_size, arr.len);
-      
-      merge(T, temp_arr[start..end], arr[start..mid], arr[mid..end]);
-      start = start + 2 * segment_size;
-    }
-    memcpy(arr, temp_arr);
-    segment_size = segment_size * 2;
-  }
+	for l < left.len && r < right.len {
+		if left[l] < right[r] {
+			dest[i] = left[l]
+			l += 1
+		} else {
+			dest[i] = right[r]
+			r += 1
+		}
+		i += 1
+	}
+
+	for l < len(left) {
+		dest[i] = left[l]
+		i += 1
+		l += 1
+	}
+	for r < len(right) {
+		dest[i] = right[r]
+		i += 1
+		r += 1
+	}
 }
 
-fn merge(type : T, mut arr: [] T, left_arr: []T, right_arr: []T) {
-  let i: mut i32 = 0; let l: mut i32 = 0; let r: mut i32 = 0;
-  while (l < left_arr.len and r < right_arr.len) {
-    if (left_arr[l] < right_arr[r]) {
-      arr[i] = left_arr[l];
-      l = l + 1;
-    } else {
-      arr[i] = right_arr[r];
-      r = r + 1;
-    }
-    i = i + 1;
-  }
-  while (l < left_arr.len) {
-    arr[i] = left_arr[l];
-    i = i + 1;
-  }
-  while (r < right_arr.len) {
-    arr[i] = right_arr[r];
-    i = i + 1;
-    r = r + 1;
-  }
-}
+merge_sort :: fn(arr: []int) {
+	if len(arr) <= 1 do return
 
-fn main() {
-  let arr: mut [] u32 = [3, 3, 4, 6, 7, 8];
-  mergeSort(u32, arr);
+	temp_arr := make([]T, len(arr))
+	defer delete(temp_arr)
+	copy(temp_arr, arr)
+
+	segment_size := 1
+	for segment_size < len(arr) {
+		start := 0
+
+		for start < len(arr) {
+			mid :: min(start + segment_size, len(arr))
+			end :: min(start + 2 * segment_size, len(arr))
+
+			merge(T, temp_arr[start:end], arr[start:mid], arr[mid:end])
+			start = start + 2 * segment_size
+		}
+		copy(arr, temp_arr)
+		segment_size = segment_size * 2
+	}
 }
