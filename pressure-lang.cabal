@@ -71,6 +71,10 @@ library
     , containers
     , mtl
 
+  build-tool-depends:
+    , alex:alex
+    , happy:happy
+
   hs-source-dirs:   src src/lexer src/parser
   default-language: GHC2024
 
@@ -108,6 +112,7 @@ test-suite pressure-lang-test
     AstTest
     LexerTest
     ParserTest
+    TypeTest
 
   build-depends:
     , base           ^>=4.20.2.0

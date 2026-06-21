@@ -27,7 +27,17 @@ For more information see [SPEC.md](./SPEC.md).
 
 ## Usage
 
-You can run the repl with:
+First generate the lexer and parser files with:
+
+```bash
+# Generates Lexer.hs in src/lexer/
+alex src/lexer/Lexer.x
+
+# Generates Lexer.hs in src/parser/
+happy src/lexer/Lexer.x --ghc
+```
+
+Then you can run the repl with:
 
 ```bash
 cabal run
@@ -44,6 +54,11 @@ For testing use:
 ```bash
 cabal test
 ```
+
+### Nix
+
+If you have nix, you can use `nix develop`, `nix build` and `nix run` for
+dealing with the project.
 
 ## Contributing
 
