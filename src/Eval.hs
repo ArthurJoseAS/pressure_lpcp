@@ -26,11 +26,12 @@ import Ast.Syntax
     StmtKind (..),
     TopLevel (..),
     Type (..),
+    UnaryOp (..),
     Value (..),
   )
 import Ast.Typecheck (TypedBlock, TypedExpr, TypedProgram, TypedStmt, TypedTopLevel)
 import Control.Monad.Except (Except, MonadError (throwError))
-import Control.Monad.State (StateT, get, modify)
+import Control.Monad.State (StateT, get, lift, modify)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 
@@ -50,7 +51,8 @@ evalExpr (Expr _ kind) = case kind of
   IntLit i -> return (VInt Signed I32 i)
   FloatLit f -> return (VFloat F64 f)
   BoolLit b -> return (VBool b)
-  BinaryExpr op l r -> evalBinaryOp op l r
+  UnaryExpr op e -> evalUnaryExpr op e
+  BinaryExpr op l r -> evalBinaryExpr op l r
   VarExpr (Ident _ i) -> evalVarExpr i
   IfExpr c t elseBlock -> evalIfExpr c t elseBlock
 
@@ -72,8 +74,28 @@ evalBlock (Block stmts expr) = do
   mapM_ evalStmt stmts
   maybe (return VUnit) evalExpr expr
 
-evalBinaryOp :: BinaryOp -> TypedExpr -> TypedExpr -> Eval Value
-evalBinaryOp op l r = do
+evalUnaryExpr :: UnaryOp -> TypedExpr -> Eval Value
+evalUnaryExpr op e = do
+  ve <- evalExpr e
+  case op of
+    NegOp -> evalNumericUn negate negate ve
+    NotOp -> evalBooleanUn not ve
+    AmpersandOp -> throwError $ RuntimeError "not implemented"
+
+evalNumericUn :: (Integer -> Integer) -> (Double -> Double) -> Value -> Eval Value
+evalNumericUn intOp floatOp v = do
+  n <- liftMaybe (RuntimeError "internal error") (asNumber v)
+  case n of
+    RuntimeInt s k i -> return (VInt s k (intOp i))
+    RuntimeFloat k d -> return (VFloat k (floatOp d))
+
+evalBooleanUn :: (Bool -> Bool) -> Value -> Eval Value
+evalBooleanUn op = \case
+  VBool b -> return (VBool $ op b)
+  _ -> throwError $ RuntimeError "internal error"
+
+evalBinaryExpr :: BinaryOp -> TypedExpr -> TypedExpr -> Eval Value
+evalBinaryExpr op l r = do
   vl <- evalExpr l
   vr <- evalExpr r
   case op of
@@ -91,13 +113,13 @@ evalBinaryOp op l r = do
     GeqOp -> evalNumericCmp (>=) (>=) vl vr
 
 evalNumericBin :: (Integer -> Integer -> Integer) -> (Double -> Double -> Double) -> Value -> Value -> Eval Value
-evalNumericBin intOp floatOp va vb = case (asNumber va, asNumber vb) of
-  (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> throwError $ RuntimeError err
-    Right (RuntimeInt s k a, RuntimeInt _ _ b) -> return (VInt s k (intOp a b))
-    Right (RuntimeFloat k a, RuntimeFloat _ b) -> return (VFloat k (floatOp a b))
-    Right _ -> throwError $ RuntimeError "internal error"
-  _ -> throwError $ RuntimeError "invalid operands"
+evalNumericBin intOp floatOp va vb =
+  case (asNumber va, asNumber vb) of
+    (Just na, Just nb) -> case (na, nb) of
+      (RuntimeInt s k a, RuntimeInt _ _ b) -> return (VInt s k (intOp a b))
+      (RuntimeFloat k a, RuntimeFloat _ b) -> return (VFloat k (floatOp a b))
+      _ -> throwError $ RuntimeError "internal error"
+    _ -> throwError $ RuntimeError "invalid operands"
 
 evalDiv :: Value -> Value -> Eval Value
 evalDiv va vb = case vb of
@@ -106,23 +128,23 @@ evalDiv va vb = case vb of
   _ -> evalNumericBin div (/) va vb
 
 evalNumericCmp :: (Integer -> Integer -> Bool) -> (Double -> Double -> Bool) -> Value -> Value -> Eval Value
-evalNumericCmp intCmp floatCmp va vb = case (asNumber va, asNumber vb) of
-  (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> throwError $ RuntimeError err
-    Right (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (intCmp a b))
-    Right (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (floatCmp a b))
-    Right _ -> throwError $ RuntimeError "internal error"
-  _ -> throwError $ RuntimeError "invalid operands"
+evalNumericCmp intCmp floatCmp va vb =
+  case (asNumber va, asNumber vb) of
+    (Just na, Just nb) -> case (na, nb) of
+      (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (intCmp a b))
+      (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (floatCmp a b))
+      _ -> throwError $ RuntimeError "internal error"
+    _ -> throwError $ RuntimeError "invalid operands"
 
 evalEq :: Value -> Value -> Eval Value
 evalEq (VBool a) (VBool b) = return (VBool (a == b))
-evalEq va vb = case (asNumber va, asNumber vb) of
-  (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> throwError $ RuntimeError err
-    Right (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (a == b))
-    Right (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (a == b))
-    Right _ -> throwError $ RuntimeError "internal error"
-  _ -> throwError $ RuntimeError "invalid operands"
+evalEq va vb =
+  case (asNumber va, asNumber vb) of
+    (Just na, Just nb) -> case (na, nb) of
+      (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (a == b))
+      (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (a == b))
+      _ -> throwError $ RuntimeError "internal error"
+    _ -> throwError $ RuntimeError "invalid operands"
 
 evalNeq :: Value -> Value -> Eval Value
 evalNeq va vb = do
@@ -182,15 +204,5 @@ asNumber = \case
   VFloat k f -> Just (RuntimeFloat k f)
   _ -> Nothing
 
-coerceNumericPair :: RuntimeNumber -> RuntimeNumber -> Either String (RuntimeNumber, RuntimeNumber)
-coerceNumericPair n m = case (n, m) of
-  (RuntimeInt s1 k1 a, RuntimeInt s2 k2 b) ->
-    if s1 == s2 && k1 == k2
-      then Right (RuntimeInt s1 k1 a, RuntimeInt s2 k2 b)
-      else Left "mismatched integer types"
-  (RuntimeFloat k1 a, RuntimeFloat k2 b) ->
-    if k1 == k2
-      then Right (RuntimeFloat k1 a, RuntimeFloat k2 b)
-      else Left "mismatched float types"
-  (RuntimeInt _ _ a, RuntimeFloat _ b) -> Right (RuntimeFloat F64 (fromIntegral a), RuntimeFloat F64 b)
-  (RuntimeFloat _ a, RuntimeInt _ _ b) -> Right (RuntimeFloat F64 a, RuntimeFloat F64 (fromIntegral b))
+liftMaybe :: Error -> Maybe a -> Eval a
+liftMaybe err = maybe (lift $ throwError err) pure

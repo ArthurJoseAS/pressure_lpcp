@@ -1,7 +1,7 @@
 {
 module Parser where
 import Lexer
-import Ast 
+import Ast.Syntax
 }
 
 %name parseRepl ReplInput
@@ -130,9 +130,14 @@ AddExpr : AddExpr '+' MulExpr { Expr (token_posn $2) (BinaryExpr AddOp $1 $3) }
         | AddExpr '-' MulExpr { Expr (token_posn $2) (BinaryExpr SubOp $1 $3) }
         | MulExpr             { $1 }
 
-MulExpr : MulExpr '*' AtomExpr { Expr (token_posn $2) (BinaryExpr MulOp $1 $3) }
-        | MulExpr '/' AtomExpr { Expr (token_posn $2) (BinaryExpr DivOp $1 $3) }
-        | AtomExpr             { $1 }
+MulExpr : MulExpr '*' UnaryExpr { Expr (token_posn $2) (BinaryExpr MulOp $1 $3) }
+        | MulExpr '/' UnaryExpr { Expr (token_posn $2) (BinaryExpr DivOp $1 $3) }
+        | UnaryExpr             { $1 }
+
+UnaryExpr : '-' UnaryExpr { Expr (token_posn $1) (UnaryExpr NegOp $2) }
+          | '&' UnaryExpr { Expr (token_posn $1) (UnaryExpr AmpersandOp $2) }
+          | '!' UnaryExpr { Expr (token_posn $1) (UnaryExpr NotOp $2) }
+          | AtomExpr      { $1 }
 
 AtomExpr : INT_LITERAL   { toIntLit $1 }
          | FLOAT_LITERAL { toFloatLit $1 }

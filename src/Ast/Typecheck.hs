@@ -30,6 +30,7 @@ import Lexer (AlexPosn)
 data Error
   = TypeMismatch AlexPosn Type Type
   | UnsupportedOp AlexPosn BinaryOp Type Type
+  | UnsupportedUnaryOp AlexPosn UnaryOp Type
   | MissingAnnotation AlexPosn
   | UndefinedVariable AlexPosn String
   deriving (Show, Eq)
@@ -68,12 +69,13 @@ checkExprM (Expr pos k) = case k of
   IntLit i -> return $ Expr (IntType pos Signed I32) (IntLit i)
   FloatLit f -> return $ Expr (FloatType pos F64) (FloatLit f)
   BoolLit b -> return $ Expr (BoolType pos) (BoolLit b)
+  UnaryExpr op e -> checkUnaryExpr pos op e
+  BinaryExpr op l r -> checkBinaryExpr pos op l r
   VarExpr i@(Ident _ name) -> do
     env <- get
     case Map.lookup name env of
       Just typ -> return $ Expr typ (VarExpr i)
       Nothing -> liftEither $ Left $ UndefinedVariable pos name
-  BinaryExpr op l r -> checkBinaryExpr pos op l r
   IfExpr c t e -> checkIfExpr pos c t e
 
 checkIfExpr :: AlexPosn -> ParsedExpr -> ParsedBlock -> Maybe ParsedBlock -> Check TypedExpr
@@ -90,6 +92,15 @@ checkIfExpr pos c t e = do
     mergeTypes p t1 t2
       | compatible t1 t2 = Right t1
       | otherwise = Left $ TypeMismatch p t1 t2
+
+checkUnaryExpr :: AlexPosn -> UnaryOp -> ParsedExpr -> Check TypedExpr
+checkUnaryExpr pos op e = do
+  te <- checkExprM e
+  let tye = typeOf te
+  liftEither $ case op of
+    NegOp -> if isNumeric tye then Right $ Expr tye (UnaryExpr op te) else Left $ UnsupportedUnaryOp pos op tye
+    NotOp -> if isBoolLike tye then Right $ Expr tye (UnaryExpr op te) else Left $ UnsupportedUnaryOp pos op tye
+    AmpersandOp -> Left $ UnsupportedUnaryOp pos op tye
 
 checkBinaryExpr :: AlexPosn -> BinaryOp -> ParsedExpr -> ParsedExpr -> Check TypedExpr
 checkBinaryExpr pos op l r = do
@@ -158,6 +169,13 @@ compatible t1 t2 = case (t1, t2) of
   (TypeName _, _) -> True
   (_, TypeName _) -> True
   (_, _) -> False
+
+isNumeric :: Type -> Bool
+isNumeric = \case
+  IntType {} -> True
+  FloatType {} -> True
+  TypeName _ -> True
+  _ -> False
 
 isBoolLike :: Type -> Bool
 isBoolLike = \case

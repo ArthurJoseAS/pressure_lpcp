@@ -20,6 +20,7 @@ module Ast
     FloatSize (..),
     Type (..),
     BinaryOp (..),
+    UnaryOp (..),
     Expr (..),
     ExprKind (..),
     Value (..),

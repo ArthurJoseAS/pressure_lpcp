@@ -1,16 +1,17 @@
 module Ast.Syntax
   ( Program (..),
-     TopLevel (..),
-     Block (..),
-     Stmt (..),
-     StmtKind (..),
-     ParsedExpr,
-     ParsedProgram,
-     ParsedTopLevel,
-     ParsedBlock,
-     ParsedStmt,
-     ParsedRepl,
-     ParsedDecl,
+    TopLevel (..),
+    Block (..),
+    Stmt (..),
+    UnaryOp (..),
+    StmtKind (..),
+    ParsedExpr,
+    ParsedProgram,
+    ParsedTopLevel,
+    ParsedBlock,
+    ParsedStmt,
+    ParsedRepl,
+    ParsedDecl,
     Repl (..),
     Decl (..),
     Ident (..),
@@ -107,6 +108,12 @@ data Type
   | UnitType
   deriving (Show, Eq)
 
+data UnaryOp
+  = NegOp
+  | NotOp
+  | AmpersandOp
+  deriving (Show, Eq)
+
 data BinaryOp
   = AddOp
   | SubOp
@@ -138,6 +145,7 @@ data ExprKind annot
   | FloatLit Double
   | BoolLit Bool
   | BinaryExpr BinaryOp (Expr annot) (Expr annot)
+  | UnaryExpr UnaryOp (Expr annot)
   | VarExpr Ident
   | IfExpr (Expr annot) (Block annot) (Maybe (Block annot))
   deriving (Show, Eq)
@@ -148,6 +156,7 @@ instance Functor ExprKind where
     FloatLit d -> FloatLit d
     BoolLit b -> BoolLit b
     BinaryExpr op l r -> BinaryExpr op (fmap f l) (fmap f r)
+    UnaryExpr op e -> UnaryExpr op (fmap f e)
     VarExpr i -> VarExpr i
     IfExpr c t e -> IfExpr (fmap f c) (fmap f t) (fmap (fmap f) e)
 

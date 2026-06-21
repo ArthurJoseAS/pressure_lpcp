@@ -59,6 +59,8 @@ testAst = do
   testIfExpressionEval
   testIfStatementEval
   testIfElseStatementEval
+  testUnaryNegEval
+  testUnaryNotEval
 
 withTokens :: String -> String -> (ParsedProgram -> IO ()) -> IO ()
 withTokens name source f = do
@@ -205,8 +207,8 @@ testFloatSub = checkOk "float subtraction" "x: float = 8.5 - 3.0;"
 testMixedSubEval :: IO ()
 testMixedSubEval =
   assertExpr
-    "mixed subtraction eval"
-    (Expr UnitType (BinaryExpr SubOp (Expr UnitType (FloatLit 8.5)) (Expr UnitType (IntLit 3))))
+    "float subtraction eval"
+    (Expr UnitType (BinaryExpr SubOp (Expr UnitType (FloatLit 8.5)) (Expr UnitType (FloatLit 3.0))))
     Map.empty
     (VFloat F64 5.5)
 
@@ -258,6 +260,28 @@ testIfElseStatementEval = do
         case Map.lookup "x" env of
           Nothing -> return ()
           other -> error $ "expected x to be absent, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testUnaryNegEval :: IO ()
+testUnaryNegEval = do
+  withTokens "unary negation eval" "x: int = -42;" $ \ast -> do
+    result <- evalParsed "unary negation eval" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Just (VInt Signed I32 (-42)) -> return ()
+          other -> error $ "expected x = -42, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testUnaryNotEval :: IO ()
+testUnaryNotEval = do
+  withTokens "unary not eval" "x: bool = !false;" $ \ast -> do
+    result <- evalParsed "unary not eval" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Just (VBool True) -> return ()
+          other -> error $ "expected x = true, got " ++ show other
       Left err -> error $ "eval failed: " ++ show err
 
 pos0 :: Lexer.AlexPosn

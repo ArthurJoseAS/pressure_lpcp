@@ -110,6 +110,34 @@ testParseProgram = do
     Program [TopLevelStmt (Stmt _ (ExprStmt (Expr _ (IfExpr _ _ Nothing))))] -> return ()
     other -> error $ "unexpected AST for if statement: " ++ show other
 
+  ast15 <-
+    assertRight "parse unary negation" $
+      runAlex "-1;" parseProgram
+  case ast15 of
+    Program [TopLevelStmt (Stmt _ (ExprStmt (Expr _ (UnaryExpr NegOp (Expr _ (IntLit 1))))))] -> return ()
+    other -> error $ "unexpected AST for unary negation: " ++ show other
+
+  ast16 <-
+    assertRight "parse unary not" $
+      runAlex "!false;" parseProgram
+  case ast16 of
+    Program [TopLevelStmt (Stmt _ (ExprStmt (Expr _ (UnaryExpr NotOp (Expr _ (BoolLit False))))))] -> return ()
+    other -> error $ "unexpected AST for unary not: " ++ show other
+
+  ast17 <-
+    assertRight "parse unary ampersand" $
+      runAlex "&x;" parseProgram
+  case ast17 of
+    Program [TopLevelStmt (Stmt _ (ExprStmt (Expr _ (UnaryExpr AmpersandOp (Expr _ (VarExpr (Ident _ "x")))))))] -> return ()
+    other -> error $ "unexpected AST for unary ampersand: " ++ show other
+
+  ast18 <-
+    assertRight "parse unary precedence" $
+      runAlex "1 * -2;" parseProgram
+  case ast18 of
+    Program [TopLevelStmt (Stmt _ (ExprStmt (Expr _ (BinaryExpr MulOp (Expr _ (IntLit 1)) (Expr _ (UnaryExpr NegOp (Expr _ (IntLit 2))))))))] -> return ()
+    other -> error $ "unexpected AST for unary precedence: " ++ show other
+
 testParseRepl :: IO ()
 testParseRepl = do
   ast <-
