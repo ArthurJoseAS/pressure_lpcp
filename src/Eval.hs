@@ -33,10 +33,18 @@ evalExpr (DeclExpr _ (ValueDecl _ (Ident _ name) maybeType maybeExpr)) = do
   val <- case maybeExpr of
     Just e -> evalExpr e
     Nothing -> case maybeType of
-      Just _ -> return VEmpty
+      Just t -> return (defaultValue t)
       Nothing -> lift $ Left "declaration lacks both type and initializer"
   modify (Map.insert name val)
   return VUnit
+
+defaultValue :: Type -> Value
+defaultValue = \case
+  IntType _ -> VInt 0
+  FloatType _ -> VFloat 0
+  BoolType _ -> VBool False
+  UnitType -> VUnit
+  TypeName _ -> VEmpty
 
 evalBinaryOp :: BinaryOp -> Expr -> Expr -> Eval Value
 evalBinaryOp op l r = do

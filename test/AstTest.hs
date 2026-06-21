@@ -2,10 +2,12 @@ module AstTest (testAst) where
 
 import Ast
 import Control.Monad.State (runStateT)
-import qualified Data.Map.Strict as Map
-import Lexer (AlexPosn (..), runAlex)
+import Data.Map.Strict qualified as Map
+import Eval (Env, evalExpr, evalProgram)
+import Lexer qualified
+import Lexer (runAlex)
 import Parser (parseProgram)
-import TypeCheck (checkProgram)
+import Type (checkProgram)
 
 assertRight :: String -> Either String a -> IO a
 assertRight name (Left err) = error $ name ++ " failed with: " ++ err
@@ -51,6 +53,11 @@ testAst = do
   testVarDefaultValue
   testIntMul
   testFloatMul
+  testIntSub
+  testFloatSub
+  testMixedSubEval
+  testBoolDefaultValue
+  testMissingAnnotationError
 
 withTokens :: String -> String -> (Program -> IO ()) -> IO ()
 withTokens name source f = do
@@ -197,6 +204,39 @@ testIntMul = checkOk "int multiplication" "x: int = 3 * 4;"
 
 testFloatMul :: IO ()
 testFloatMul = checkOk "float multiplication" "x: float = 1.5 * 2.0;"
+
+testIntSub :: IO ()
+testIntSub = checkOk "int subtraction" "x: int = 8 - 3;"
+
+testFloatSub :: IO ()
+testFloatSub = checkOk "float subtraction" "x: float = 8.5 - 3.0;"
+
+testMixedSubEval :: IO ()
+testMixedSubEval =
+  assertExpr
+    "mixed subtraction eval"
+    (BinaryExpr pos0 SubOp (FloatLit pos0 8.5) (IntLit pos0 3))
+    Map.empty
+    (VFloat 5.5)
+
+testBoolDefaultValue :: IO ()
+testBoolDefaultValue = do
+  withTokens "bool decl without init" "x: bool;" $ \ast ->
+    case checkProgram ast of
+      Right () -> do
+        case runStateT (evalProgram ast) Map.empty of
+          Right (_, env) ->
+            case Map.lookup "x" env of
+              Just (VBool False) -> return ()
+              other -> error $ "expected x = false for uninitialized bool, got " ++ show other
+          Left err -> error $ "eval failed: " ++ err
+      Left err -> error $ "type check failed: " ++ show err
+
+testMissingAnnotationError :: IO ()
+testMissingAnnotationError =
+  case checkProgram (Program [TopLevelStmt (DeclExpr pos0 (ValueDecl Mutable (identFrom "x") Nothing Nothing))]) of
+    Left _ -> return ()
+    Right () -> error "missing annotation: expected type error but passed"
 
 pos0 :: Lexer.AlexPosn
 pos0 = Lexer.AlexPn 0 1 1

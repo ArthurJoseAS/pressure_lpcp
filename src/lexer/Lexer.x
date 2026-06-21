@@ -34,8 +34,10 @@ tokens :-
   enum                               { mkToken KwEnum }
   return                             { mkToken KwReturn }
   int                                { mkToken KwInt }
+  uint                               { mkToken KwUint }
   float                              { mkToken KwFloat }
   bool                               { mkToken KwBool }
+  byte                               { mkToken KwByte }
   \=                                 { mkToken Equal }
   \<                                 { mkToken Lt }
   \>                                 { mkToken Gt }
@@ -87,8 +89,10 @@ data Token
   | KwEnum AlexPosn
   | KwReturn AlexPosn
   | KwInt AlexPosn
+  | KwUint AlexPosn
   | KwFloat AlexPosn
   | KwBool AlexPosn
+  | KwByte AlexPosn
   | Equal AlexPosn
   | Lt AlexPosn
   | Gt AlexPosn
@@ -138,8 +142,10 @@ token_posn (KwStruct p)   = p
 token_posn (KwEnum p)     = p
 token_posn (KwReturn p)   = p
 token_posn (KwInt p)   = p
+token_posn (KwUint p)   = p
 token_posn (KwFloat p)   = p
 token_posn (KwBool p)   = p
+token_posn (KwByte p)   = p
 token_posn (Equal p)      = p
 token_posn (Lt p)         = p
 token_posn (Gt p)         = p

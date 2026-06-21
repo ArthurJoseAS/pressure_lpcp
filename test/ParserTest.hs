@@ -12,6 +12,7 @@ testParser :: IO ()
 testParser = do
   testParseProgram
   testParseRepl
+  testParseErrors
 
 testParseProgram :: IO ()
 testParseProgram = do
@@ -71,6 +72,13 @@ testParseProgram = do
     Program [TopLevelStmt (VarExpr _ (Ident _ "x"))] -> return ()
     other -> error $ "unexpected AST for variable reference: " ++ show other
 
+  ast10 <-
+    assertRight "parse subtraction precedence" $
+      runAlex "value: i32 = 1 - 2 * 3;" parseProgram
+  case ast10 of
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ SubOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))))))] -> return ()
+    other -> error $ "unexpected AST for subtraction precedence: " ++ show other
+
 testParseRepl :: IO ()
 testParseRepl = do
   ast <-
@@ -114,3 +122,12 @@ testParseRepl = do
   case ast6 of
     ReplExpr (BinaryExpr _ AddOp (VarExpr _ (Ident _ "x")) (IntLit _ 1)) -> return ()
     other -> error $ "unexpected AST for repl variable in expr: " ++ show other
+
+testParseErrors :: IO ()
+testParseErrors = do
+  assertLeft "program requires semicolon" $ runAlex "1 + 2" parseProgram
+  assertLeft "malformed expression" $ runAlex "x: int = 1 + ;" parseProgram
+
+assertLeft :: String -> Either String a -> IO ()
+assertLeft _ (Left _) = return ()
+assertLeft name (Right _) = error $ name ++ ": expected parse error"

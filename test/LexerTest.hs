@@ -1,6 +1,6 @@
 module LexerTest (testLexer) where
 
-import Lexer (tokenizeEither)
+import Lexer (AlexPosn (..), Token (..), tokenizeEither)
 
 assertEqual :: (Show a, Eq a) => String -> a -> a -> IO ()
 assertEqual name expected actual =
@@ -26,8 +26,8 @@ testLexer = do
 
   parens <-
     assertRight "tokenize delimiters" $
-      tokenizeEither "( ) { } [ ] :: . , ; : ' \""
-  assertEqual "delimiter count" 14 (length parens)
+      tokenizeEither "( ) { } [ ] . , ; : ' \""
+  assertEqual "delimiter count" 12 (length parens)
 
   ids <- assertRight "tokenize identifiers" $ tokenizeEither "foo bar_baz x'"
   assertEqual "identifier count" 3 (length ids)
@@ -37,4 +37,25 @@ testLexer = do
 
   let input = "let x: i32 = 42;"
   _ <- assertRight "tokenize declaration" $ tokenizeEither input
+
+  eq <- assertRight "tokenize equality operator" $ tokenizeEither "=="
+  case eq of
+    [CmpEq _] -> return ()
+    other -> error $ "expected CmpEq, got " ++ show other
+
+  comment <- assertRight "skip line comment" $ tokenizeEither "x // ignored\ny"
+  case comment of
+    [Id _ "x", Id _ "y"] -> return ()
+    other -> error $ "expected identifiers around skipped comment, got " ++ show other
+
+  positioned <- assertRight "token positions" $ tokenizeEither "x\n  y"
+  case positioned of
+    [Id (AlexPn _ 1 1) "x", Id (AlexPn _ 2 3) "y"] -> return ()
+    other -> error $ "unexpected token positions: " ++ show other
+
+  assertLeft "invalid character" $ tokenizeEither "@"
   return ()
+
+assertLeft :: String -> Either String a -> IO ()
+assertLeft _ (Left _) = return ()
+assertLeft name (Right _) = error $ name ++ ": expected lexer error"
