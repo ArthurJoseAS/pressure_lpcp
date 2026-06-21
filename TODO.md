@@ -6,7 +6,7 @@
 
 ## Language
 
-- [ ] Add support for conditionals (grammar, interpreter)
+- [x] Add support for conditionals (grammar, interpreter)
 - [ ] Add support for loops (grammar, interpreter)
 - [ ] Add support for functions (grammar, interpreter)
 - [ ] Add support for pointers (grammar, interpreter)
