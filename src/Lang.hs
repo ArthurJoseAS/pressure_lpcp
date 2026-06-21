@@ -1,24 +1,27 @@
 module Lang (repl, run) where
 
-import Ast (Repl (..), Value)
+import Ast (ParsedRepl, Repl (..), Value)
+import Ast.Typecheck qualified as Type
 import Control.Monad (forever, when)
-import Control.Monad.Except (ExceptT, catchError, liftEither, runExceptT, throwError)
-import Control.Monad.State (StateT, evalStateT, lift, liftIO, mapStateT)
+import Control.Monad.Except (ExceptT (..), catchError, liftEither, runExcept, runExceptT, throwError)
+import Control.Monad.State (StateT, evalStateT, get, lift, liftIO, put, runStateT)
 import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Map.Strict qualified as Map
 import Eval (Env, Eval, evalReplInput)
+import Eval qualified
 import Parser (genAst, parseRepl)
 import System.IO (hFlush, isEOF, stdout)
-import Type qualified
 
 -- TODO: Separate REPL into separate module and add support for control characters.
 
-type REPL a = StateT Env (ExceptT Error IO) a
+type ReplState = (Env, Type.TypeEnv)
+
+type REPL a = StateT ReplState (ExceptT Error IO) a
 
 repl :: IO ()
 repl = do
-  _ <- runExceptT $ evalStateT replLoop Map.empty
+  _ <- runExceptT $ evalStateT replLoop (Map.empty, Map.empty)
   putStrLn "Goodbye!"
 
 replLoop :: REPL ()
@@ -29,7 +32,7 @@ replLoop = forever $ replStep `catchError` handleError
 
 run :: String -> IO ()
 run input = do
-  _ <- runExceptT $ evalStateT (eval input) Map.empty
+  _ <- runExceptT $ evalStateT (eval input) (Map.empty, Map.empty)
   return ()
 
 replStep :: REPL ()
@@ -48,29 +51,36 @@ replStep = do
     ReplExpr _ -> print val
     ReplStmt _ -> return ()
 
-eval :: String -> REPL (Value, Ast.Repl)
+eval :: String -> REPL (Value, ParsedRepl)
 eval input = do
   ast <- liftEither $ first ParseError $ genAst input parseRepl
-  _ <- liftEither $ first TypeError $ Type.checkReplInput ast
-  val <- liftEval $ evalReplInput ast
+  (_, typeEnv) <- get
+  (typedAst, nextTypeEnv) <- liftEither $ first TypeError $ Type.checkReplInputWithEnv typeEnv ast
+  val <- liftEval nextTypeEnv $ evalReplInput typedAst
 
   return (val, ast)
 
 data Error
   = ParseError String
   | TypeError Type.Error
-  | RuntimeError String
+  | RuntimeError Eval.Error
   | Exit
   deriving (Show, Eq)
 
-liftEval :: Eval Value -> REPL Value
-liftEval = mapStateT $ liftEither . first RuntimeError
+liftEval :: Type.TypeEnv -> Eval Value -> REPL Value
+liftEval nextTypeEnv action = do
+  (env, _) <- get
+  case runExcept (runStateT action env) of
+    Left err -> lift $ throwError $ RuntimeError err
+    Right (val, nextEnv) -> do
+      put (nextEnv, nextTypeEnv)
+      return val
 
 render :: Error -> String
 render = \case
   ParseError e -> "parser error: " ++ e
   TypeError e -> "type error: " ++ show e
-  RuntimeError e -> "runtime error: " ++ e
+  RuntimeError e -> "runtime error: " ++ show e
   Exit -> ""
 
 trim :: String -> String

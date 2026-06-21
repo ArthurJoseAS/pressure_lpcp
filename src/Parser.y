@@ -79,14 +79,69 @@ Program : TopLevels { Program $1 }
 TopLevels : TopLevel TopLevels { $1 : $2 }
           |                    { [] }
 
-TopLevel : Expr ';' { TopLevelStmt $1 }
+TopLevel : Stmt   { TopLevelStmt $1 }
+         | IfExpr { TopLevelStmt (Stmt (exprPos $1) (ExprStmt $1)) }
 
-ReplInput : Expr ';' { ReplStmt $1 }
+ReplInput : Stmt { ReplStmt $1 }
+          | ValueDecl { ReplStmt (Stmt (declPos $1) (DeclStmt $1)) }
           | Expr { ReplExpr $1 }
+
+{- statements -}
+
+Stmt : ValueDecl ';' { Stmt (declPos $1) (DeclStmt $1) }
+     | Expr ';'      { Stmt (exprPos $1) (ExprStmt $1) }
 
 ValueDecl : ID ':' Type               { ValueDecl Mutable (toIdent $1) (Just $3) Nothing }
           | ID ':' OptType '=' Expr   { ValueDecl Mutable (toIdent $1) $3 (Just $5) }
           | ID ':' OptType ':' Expr   { ValueDecl Constant (toIdent $1) $3 (Just $5) }
+
+{- expressions -}
+
+Block : '{' '}'           { Block [] Nothing }
+      | '{' BlockBody '}' { $2 }
+
+BlockBody : Expr           { Block [] (Just $1) }
+          | Stmt           { Block [$1] Nothing }
+          | Stmt BlockBody { prependStmt $1 $2 }
+
+Expr : IfExpr        { $1 }
+     | LogicalOrExpr { $1 }
+
+IfExpr : if Expr Block            { Expr (token_posn $1) (IfExpr $2 $3 Nothing) }
+       | if Expr Block else Block { Expr (token_posn $1) (IfExpr $2 $3 (Just $5)) }
+
+LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { Expr (token_posn $2) (BinaryExpr OrOp $1 $3) }
+              | LogicalAndExpr                  { $1 }
+
+LogicalAndExpr : LogicalAndExpr and ComparisonExpr { Expr (token_posn $2) (BinaryExpr AndOp $1 $3) }
+               | ComparisonExpr                    { $1 }
+
+ComparisonExpr : AddExpr CompareOp AddExpr { let (pos, op) = $2 in Expr pos (BinaryExpr op $1 $3) }
+               | AddExpr                   { $1 }
+
+CompareOp : '==' { (token_posn $1, EqOp) }
+          | '!=' { (token_posn $1, NeqOp) }
+          | '<'  { (token_posn $1, LtOp) }
+          | '<=' { (token_posn $1, LeqOp) }
+          | '>'  { (token_posn $1, GtOp) }
+          | '>=' { (token_posn $1, GeqOp) }
+
+AddExpr : AddExpr '+' MulExpr { Expr (token_posn $2) (BinaryExpr AddOp $1 $3) }
+        | AddExpr '-' MulExpr { Expr (token_posn $2) (BinaryExpr SubOp $1 $3) }
+        | MulExpr             { $1 }
+
+MulExpr : MulExpr '*' AtomExpr { Expr (token_posn $2) (BinaryExpr MulOp $1 $3) }
+        | MulExpr '/' AtomExpr { Expr (token_posn $2) (BinaryExpr DivOp $1 $3) }
+        | AtomExpr             { $1 }
+
+AtomExpr : INT_LITERAL   { toIntLit $1 }
+         | FLOAT_LITERAL { toFloatLit $1 }
+         | true          { Expr (token_posn $1) (BoolLit True) }
+         | false         { Expr (token_posn $1) (BoolLit False) }
+         | '(' Expr ')'  { $2 }
+         | ID            { Expr (token_posn $1) (VarExpr (toIdent $1)) }
+
+{- types -}
 
 OptType : Type { Just $1 }
         |      { Nothing }
@@ -109,42 +164,6 @@ TypeLit : bool  { BoolType (token_posn $1) }
         | f32   { FloatType (token_posn $1) F32 }
         | f64   { FloatType (token_posn $1) F64 }
 
-{- expressions -}
-
-Expr : ValueDecl { DeclExpr (declPos $1) $1 }
-     | LogicalOrExpr { $1 }
-
-LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { BinaryExpr (token_posn $2) OrOp $1 $3 }
-              | LogicalAndExpr                  { $1 }
-
-LogicalAndExpr : LogicalAndExpr and ComparisonExpr { BinaryExpr (token_posn $2) AndOp $1 $3 }
-               | ComparisonExpr                    { $1 }
-
-ComparisonExpr : AddExpr CompareOp AddExpr { let (pos, op) = $2 in BinaryExpr pos op $1 $3 }
-               | AddExpr                   { $1 }
-
-CompareOp : '==' { (token_posn $1, EqOp) }
-          | '!=' { (token_posn $1, NeqOp) }
-          | '<'  { (token_posn $1, LtOp) }
-          | '<=' { (token_posn $1, LeqOp) }
-          | '>'  { (token_posn $1, GtOp) }
-          | '>=' { (token_posn $1, GeqOp) }
-
-AddExpr : AddExpr '+' MulExpr { BinaryExpr (token_posn $2) AddOp $1 $3 }
-        | AddExpr '-' MulExpr { BinaryExpr (token_posn $2) SubOp $1 $3 }
-        | MulExpr             { $1 }
-
-MulExpr : MulExpr '*' AtomExpr { BinaryExpr (token_posn $2) MulOp $1 $3 }
-        | MulExpr '/' AtomExpr { BinaryExpr (token_posn $2) DivOp $1 $3 }
-        | AtomExpr             { $1 }
-
-AtomExpr : INT_LITERAL   { toIntLit $1 }
-         | FLOAT_LITERAL { toFloatLit $1 }
-         | true          { BoolLit (token_posn $1) True }
-         | false         { BoolLit (token_posn $1) False }
-         | '(' Expr ')'  { $2 }
-         | ID            { VarExpr (token_posn $1) (toIdent $1) }
-
 {
 parseError :: Token -> Alex a
 parseError tok =
@@ -156,16 +175,22 @@ toIdent :: Token -> Ident
 toIdent (Id pos name) = Ident pos name
 toIdent _ = error "internal parser error: expected identifier"
 
-toIntLit :: Token -> Expr
-toIntLit (IntLiteral pos value) = IntLit pos value
+toIntLit :: Token -> ParsedExpr
+toIntLit (IntLiteral pos value) = Expr pos (IntLit value)
 toIntLit _ = error "internal parser error: expected integer literal"
 
-toFloatLit :: Token -> Expr
-toFloatLit (FloatLiteral pos value) = FloatLit pos value
+toFloatLit :: Token -> ParsedExpr
+toFloatLit (FloatLiteral pos value) = Expr pos (FloatLit value)
 toFloatLit _ = error "internal parser error: expected float literal"
 
-declPos :: Decl -> AlexPosn
+declPos :: ParsedDecl -> AlexPosn
 declPos (ValueDecl _ (Ident pos _) _ _) = pos
+
+exprPos :: ParsedExpr -> AlexPosn
+exprPos (Expr pos _) = pos
+
+prependStmt :: ParsedStmt -> ParsedBlock -> ParsedBlock
+prependStmt stmt (Block stmts expr) = Block (stmt : stmts) expr
 
 genAst = runAlex
 }

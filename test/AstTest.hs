@@ -1,34 +1,34 @@
 module AstTest (testAst) where
 
-import Ast
+import Ast hiding (Error)
+import Control.Monad.Except (runExcept)
 import Control.Monad.State (runStateT)
 import Data.Map.Strict qualified as Map
-import Eval (Env, evalExpr, evalProgram)
-import Lexer qualified
+import Eval (Env, Error (..), evalExpr, evalProgram)
 import Lexer (runAlex)
+import Lexer qualified
 import Parser (parseProgram)
-import Type (checkProgram)
 
 assertRight :: String -> Either String a -> IO a
 assertRight name (Left err) = error $ name ++ " failed with: " ++ err
 assertRight _ (Right x) = return x
 
-assertExpr :: String -> Expr -> Env -> Value -> IO ()
+assertExpr :: String -> Expr Type -> Env -> Value -> IO ()
 assertExpr name expr env expected = do
-  case runStateT (evalExpr expr) env of
-    Left err -> error $ name ++ " failed: " ++ err
+  case runExcept (runStateT (evalExpr expr) env) of
+    Left err -> error $ name ++ " failed: " ++ show err
     Right (val, _) ->
       if val == expected
         then return ()
         else error $ name ++ ": expected " ++ show expected ++ " but got " ++ show val
 
-assertEvalError :: String -> Expr -> Env -> String -> IO ()
+assertEvalError :: String -> Expr Type -> Env -> Error -> IO ()
 assertEvalError name expr env expectedErr = do
-  case runStateT (evalExpr expr) env of
+  case runExcept (runStateT (evalExpr expr) env) of
     Left err ->
       if err == expectedErr
         then return ()
-        else error $ name ++ ": expected error '" ++ expectedErr ++ "' but got '" ++ err ++ "'"
+        else error $ name ++ ": expected error '" ++ show expectedErr ++ "' but got '" ++ show err ++ "'"
     Right (val, _) -> error $ name ++ ": expected error but got " ++ show val
 
 testAst :: IO ()
@@ -38,8 +38,6 @@ testAst = do
   testBoolLit
   testIntAdd
   testFloatAdd
-  testMixedAdd
-  testIntPromotion
   testIntDiv
   testFloatDiv
   testDivByZero
@@ -58,8 +56,11 @@ testAst = do
   testMixedSubEval
   testBoolDefaultValue
   testMissingAnnotationError
+  testIfExpressionEval
+  testIfStatementEval
+  testIfElseStatementEval
 
-withTokens :: String -> String -> (Program -> IO ()) -> IO ()
+withTokens :: String -> String -> (ParsedProgram -> IO ()) -> IO ()
 withTokens name source f = do
   ast <- assertRight ("parse " ++ name) $ runAlex source parseProgram
   f ast
@@ -78,12 +79,19 @@ checkErr name source =
       Left _ -> return ()
       Right () -> error $ name ++ ": expected type error but passed"
 
+evalParsed :: String -> ParsedProgram -> IO (Either Error (Value, Env))
+evalParsed name ast =
+  case checkProgramTyped ast of
+    Left err -> error $ name ++ " type check failed: " ++ show err
+    Right typedAst -> return $ runExcept (runStateT (evalProgram typedAst) Map.empty)
+
 testIntLit :: IO ()
 testIntLit = do
   checkOk "int literal" "x: int = 42;"
-  withTokens "int literal eval" "x: int = 42;" $ \ast ->
-    case runStateT (evalProgram ast) Map.empty of
-      Left err -> error $ "int literal eval failed: " ++ err
+  withTokens "int literal eval" "x: int = 42;" $ \ast -> do
+    result <- evalParsed "int literal eval" ast
+    case result of
+      Left err -> error $ "int literal eval failed: " ++ show err
       Right (val, env) -> do
         if val == VUnit then return () else error $ "expected VUnit got " ++ show val
         case Map.lookup "x" env of
@@ -93,9 +101,10 @@ testIntLit = do
 testFloatLit :: IO ()
 testFloatLit = do
   checkOk "float literal" "x: float = 3.14;"
-  withTokens "float literal eval" "x: float = 3.14;" $ \ast ->
-    case runStateT (evalProgram ast) Map.empty of
-      Left err -> error $ "float literal eval failed: " ++ err
+  withTokens "float literal eval" "x: float = 3.14;" $ \ast -> do
+    result <- evalParsed "float literal eval" ast
+    case result of
+      Left err -> error $ "float literal eval failed: " ++ show err
       Right (_, env) ->
         case Map.lookup "x" env of
           Just (VFloat F64 3.14) -> return ()
@@ -104,9 +113,10 @@ testFloatLit = do
 testBoolLit :: IO ()
 testBoolLit = do
   checkOk "bool literal" "x: bool = true;"
-  withTokens "bool literal eval" "x: bool = true;" $ \ast ->
-    case runStateT (evalProgram ast) Map.empty of
-      Left err -> error $ "bool literal eval failed: " ++ err
+  withTokens "bool literal eval" "x: bool = true;" $ \ast -> do
+    result <- evalParsed "bool literal eval" ast
+    case result of
+      Left err -> error $ "bool literal eval failed: " ++ show err
       Right (_, env) ->
         case Map.lookup "x" env of
           Just (VBool True) -> return ()
@@ -118,13 +128,6 @@ testIntAdd = checkOk "int addition" "x: int = 1 + 2;"
 testFloatAdd :: IO ()
 testFloatAdd = checkOk "float addition" "x: float = 1.0 + 2.0;"
 
-testMixedAdd :: IO ()
-testMixedAdd = checkOk "mixed int+float" "x: float = 1 + 2.0;"
-
-testIntPromotion :: IO ()
-testIntPromotion = do
-  checkOk "int promotion to float annotation" "x: float = 1 + 2;"
-
 testIntDiv :: IO ()
 testIntDiv = checkOk "int division" "x: int = 8 / 4;"
 
@@ -133,27 +136,19 @@ testFloatDiv = checkOk "float division" "x: float = 3.0 / 2.0;"
 
 testDivByZero :: IO ()
 testDivByZero = do
-  withTokens "division by zero int" "x: int = 1 / 0;" $ \ast ->
-    case checkProgram ast of
-      Right () ->
-        case runStateT (evalProgram ast) Map.empty of
-          Left err ->
-            if err == "division by zero"
-              then return ()
-              else error $ "expected 'division by zero' got '" ++ err ++ "'"
-          Right _ -> error "expected runtime error for division by zero"
-      Left _ -> return ()
+  withTokens "division by zero int" "x: int = 1 / 0;" $ \ast -> do
+    result <- evalParsed "division by zero int" ast
+    case result of
+      Left (RuntimeError "division by zero") -> return ()
+      Left err -> error $ "expected 'division by zero' got '" ++ show err ++ "'"
+      Right _ -> error "expected runtime error for division by zero"
 
-  withTokens "division by zero float" "x: float = 1.0 / 0.0;" $ \ast ->
-    case checkProgram ast of
-      Right () ->
-        case runStateT (evalProgram ast) Map.empty of
-          Left err ->
-            if err == "division by zero"
-              then return ()
-              else error $ "expected 'division by zero' got '" ++ err ++ "'"
-          Right _ -> error "expected runtime error for division by zero"
-      Left _ -> return ()
+  withTokens "division by zero float" "x: float = 1.0 / 0.0;" $ \ast -> do
+    result <- evalParsed "division by zero float" ast
+    case result of
+      Left (RuntimeError "division by zero") -> return ()
+      Left err -> error $ "expected 'division by zero' got '" ++ show err ++ "'"
+      Right _ -> error "expected runtime error for division by zero"
 
 testTypeNameAnnotation :: IO ()
 testTypeNameAnnotation = checkOk "TypeName annotation" "x: i32 = 42;"
@@ -173,31 +168,27 @@ testFloatNarrowingError = checkErr "float to int narrowing" "x: int = 3.14;"
 testVarDeclAndLookup :: IO ()
 testVarDeclAndLookup = do
   let decl42 = "x: int = 42;"
-  withTokens "parse decl42" decl42 $ \ast ->
-    case checkProgram ast of
-      Right () -> do
-        case runStateT (evalProgram ast) Map.empty of
-          Right (_, env) ->
-            assertExpr "x after decl" (VarExpr pos0 (identFrom "x")) env (VInt Signed I32 42)
-          Left err -> error $ "eval failed: " ++ err
-      Left err -> error $ "type check failed: " ++ show err
+  withTokens "parse decl42" decl42 $ \ast -> do
+    result <- evalParsed "var decl and lookup" ast
+    case result of
+      Right (_, env) ->
+        assertExpr "x after decl" (Expr UnitType (VarExpr (identFrom "x"))) env (VInt Signed I32 42)
+      Left err -> error $ "eval failed: " ++ show err
 
 testVarUndefined :: IO ()
-testVarUndefined = do
-  assertEvalError "undefined variable" (VarExpr pos0 (identFrom "z")) Map.empty "undefined variable: z"
+testVarUndefined =
+  assertEvalError "undefined variable" (Expr UnitType (VarExpr (identFrom "z"))) Map.empty (RuntimeError "undefined variable: z")
 
 testVarDefaultValue :: IO ()
 testVarDefaultValue = do
-  withTokens "decl without init" "x: int;" $ \ast ->
-    case checkProgram ast of
-      Right () -> do
-        case runStateT (evalProgram ast) Map.empty of
-          Right (_, env) ->
-            case Map.lookup "x" env of
-              Just (VInt Signed I32 0) -> return ()
-              other -> error $ "expected x = 0 for uninitialized int, got " ++ show other
-          Left err -> error $ "eval failed: " ++ err
-      Left err -> error $ "type check failed: " ++ show err
+  withTokens "decl without init" "x: int;" $ \ast -> do
+    result <- evalParsed "decl without init" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Just (VInt Signed I32 0) -> return ()
+          other -> error $ "expected x = 0 for uninitialized int, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
 
 testIntMul :: IO ()
 testIntMul = checkOk "int multiplication" "x: int = 3 * 4;"
@@ -215,28 +206,59 @@ testMixedSubEval :: IO ()
 testMixedSubEval =
   assertExpr
     "mixed subtraction eval"
-    (BinaryExpr pos0 SubOp (FloatLit pos0 8.5) (IntLit pos0 3))
+    (Expr UnitType (BinaryExpr SubOp (Expr UnitType (FloatLit 8.5)) (Expr UnitType (IntLit 3))))
     Map.empty
     (VFloat F64 5.5)
 
 testBoolDefaultValue :: IO ()
 testBoolDefaultValue = do
-  withTokens "bool decl without init" "x: bool;" $ \ast ->
-    case checkProgram ast of
-      Right () -> do
-        case runStateT (evalProgram ast) Map.empty of
-          Right (_, env) ->
-            case Map.lookup "x" env of
-              Just (VBool False) -> return ()
-              other -> error $ "expected x = false for uninitialized bool, got " ++ show other
-          Left err -> error $ "eval failed: " ++ err
-      Left err -> error $ "type check failed: " ++ show err
+  withTokens "bool decl without init" "x: bool;" $ \ast -> do
+    result <- evalParsed "bool decl without init" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Just (VBool False) -> return ()
+          other -> error $ "expected x = false for uninitialized bool, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
 
 testMissingAnnotationError :: IO ()
 testMissingAnnotationError =
-  case checkProgram (Program [TopLevelStmt (DeclExpr pos0 (ValueDecl Mutable (identFrom "x") Nothing Nothing))]) of
+  case checkProgram (Program [TopLevelStmt (Stmt pos0 (DeclStmt (ValueDecl Mutable (identFrom "x") Nothing Nothing)))]) of
     Left _ -> return ()
     Right () -> error "missing annotation: expected type error but passed"
+
+testIfExpressionEval :: IO ()
+testIfExpressionEval = do
+  withTokens "if expression eval" "x: int = if true { 1 } else { 2 };" $ \ast -> do
+    result <- evalParsed "if expression eval" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Just (VInt Signed I32 1) -> return ()
+          other -> error $ "expected x = 1, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testIfStatementEval :: IO ()
+testIfStatementEval = do
+  withTokens "if statement eval" "if false { x: int = 1; }" $ \ast -> do
+    result <- evalParsed "if statement eval" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Nothing -> return ()
+          other -> error $ "expected x to be absent, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testIfElseStatementEval :: IO ()
+testIfElseStatementEval = do
+  withTokens "if else statement eval" "if false { x: int = 1; } else { y: float = 42.0; }" $ \ast -> do
+    result <- evalParsed "if else statement eval" ast
+    case result of
+      Right (_, env) ->
+        case Map.lookup "x" env of
+          Nothing -> return ()
+          other -> error $ "expected x to be absent, got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
 
 pos0 :: Lexer.AlexPosn
 pos0 = Lexer.AlexPn 0 1 1

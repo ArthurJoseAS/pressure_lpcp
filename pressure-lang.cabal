@@ -56,14 +56,15 @@ common warnings
   ghc-options: -Wall
 
 library
-  import:           warnings
+  import:             warnings
   exposed-modules:
     Ast
+    Ast.Syntax
+    Ast.Typecheck
     Eval
     Lang
     Lexer
     Parser
-    Type
 
   build-depends:
     , array
@@ -75,8 +76,8 @@ library
     , alex:alex
     , happy:happy
 
-  hs-source-dirs:   src src/lexer src/parser
-  default-language: GHC2024
+  hs-source-dirs:     src
+  default-language:   GHC2024
 
 executable pressure-lang
   -- Import common warning flags.

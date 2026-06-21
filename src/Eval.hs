@@ -1,34 +1,78 @@
 module Eval
-  ( Eval,
+  ( Error (..),
+    Eval,
     Env,
     evalExpr,
+    evalStmt,
+    evalBlock,
     evalReplInput,
     evalProgram,
   )
 where
 
-import Ast
+import Ast.Syntax
+  ( BinaryOp (..),
+    Block (..),
+    Decl (..),
+    Expr (..),
+    ExprKind (..),
+    FloatSize (..),
+    Ident (..),
+    IntSize (..),
+    Program (..),
+    Repl (..),
+    Sign (..),
+    Stmt (..),
+    StmtKind (..),
+    TopLevel (..),
+    Type (..),
+    Value (..),
+  )
+import Ast.Typecheck (TypedBlock, TypedExpr, TypedProgram, TypedStmt, TypedTopLevel)
+import Control.Monad.Except (Except, MonadError (throwError))
 import Control.Monad.State (StateT, get, modify)
-import Control.Monad.Trans (lift)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 
-type Error = String
+data Error
+  = RuntimeError String
+  | BreakSignal Value
+  | ContinueSignal
+  | ReturnSignal Value
+  deriving (Eq, Show)
 
 type Env = Map String Value
 
-type Eval a = StateT Env (Either Error) a
+type Eval a = StateT Env (Except Error) a
 
-evalExpr :: Expr -> Eval Value
-evalExpr = \case
-  IntLit _ i -> return (VInt Signed I32 i)
-  FloatLit _ f -> return (VFloat F64 f)
-  BoolLit _ b -> return (VBool b)
-  BinaryExpr _ op l r -> evalBinaryOp op l r
-  VarExpr _ (Ident _ i) -> evalVarExpr i
-  DeclExpr _ (ValueDecl _ (Ident _ i) mt me) -> evalDeclExpr i mt me
+evalExpr :: TypedExpr -> Eval Value
+evalExpr (Expr _ kind) = case kind of
+  IntLit i -> return (VInt Signed I32 i)
+  FloatLit f -> return (VFloat F64 f)
+  BoolLit b -> return (VBool b)
+  BinaryExpr op l r -> evalBinaryOp op l r
+  VarExpr (Ident _ i) -> evalVarExpr i
+  IfExpr c t elseBlock -> evalIfExpr c t elseBlock
 
-evalBinaryOp :: BinaryOp -> Expr -> Expr -> Eval Value
+evalIfExpr :: TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
+evalIfExpr c t me = do
+  v <- evalExpr c
+  case v of
+    VBool True -> evalBlock t
+    VBool False -> maybe (return VUnit) evalBlock me
+    _ -> throwError $ RuntimeError "if condition must be bool"
+
+evalStmt :: TypedStmt -> Eval Value
+evalStmt (Stmt _ stmt) = case stmt of
+  DeclStmt (ValueDecl _ (Ident _ i) mt me) -> evalDeclExpr i mt me
+  ExprStmt expr -> evalExpr expr >> return VUnit
+
+evalBlock :: TypedBlock -> Eval Value
+evalBlock (Block stmts expr) = do
+  mapM_ evalStmt stmts
+  maybe (return VUnit) evalExpr expr
+
+evalBinaryOp :: BinaryOp -> TypedExpr -> TypedExpr -> Eval Value
 evalBinaryOp op l r = do
   vl <- evalExpr l
   vr <- evalExpr r
@@ -49,76 +93,76 @@ evalBinaryOp op l r = do
 evalNumericBin :: (Integer -> Integer -> Integer) -> (Double -> Double -> Double) -> Value -> Value -> Eval Value
 evalNumericBin intOp floatOp va vb = case (asNumber va, asNumber vb) of
   (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> lift (Left err)
+    Left err -> throwError $ RuntimeError err
     Right (RuntimeInt s k a, RuntimeInt _ _ b) -> return (VInt s k (intOp a b))
     Right (RuntimeFloat k a, RuntimeFloat _ b) -> return (VFloat k (floatOp a b))
-    Right _ -> lift $ Left "internal error"
-  _ -> lift $ Left "invalid operands"
+    Right _ -> throwError $ RuntimeError "internal error"
+  _ -> throwError $ RuntimeError "invalid operands"
 
 evalDiv :: Value -> Value -> Eval Value
 evalDiv va vb = case vb of
-  VInt _ _ 0 -> lift $ Left "division by zero"
-  VFloat _ 0 -> lift $ Left "division by zero"
+  VInt _ _ 0 -> throwError $ RuntimeError "division by zero"
+  VFloat _ 0 -> throwError $ RuntimeError "division by zero"
   _ -> evalNumericBin div (/) va vb
 
 evalNumericCmp :: (Integer -> Integer -> Bool) -> (Double -> Double -> Bool) -> Value -> Value -> Eval Value
 evalNumericCmp intCmp floatCmp va vb = case (asNumber va, asNumber vb) of
   (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> lift (Left err)
+    Left err -> throwError $ RuntimeError err
     Right (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (intCmp a b))
     Right (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (floatCmp a b))
-    Right _ -> lift $ Left "internal error"
-  _ -> lift $ Left "invalid operands"
+    Right _ -> throwError $ RuntimeError "internal error"
+  _ -> throwError $ RuntimeError "invalid operands"
 
 evalEq :: Value -> Value -> Eval Value
 evalEq (VBool a) (VBool b) = return (VBool (a == b))
 evalEq va vb = case (asNumber va, asNumber vb) of
   (Just na, Just nb) -> case coerceNumericPair na nb of
-    Left err -> lift (Left err)
+    Left err -> throwError $ RuntimeError err
     Right (RuntimeInt _ _ a, RuntimeInt _ _ b) -> return (VBool (a == b))
     Right (RuntimeFloat _ a, RuntimeFloat _ b) -> return (VBool (a == b))
-    Right _ -> lift $ Left "internal error"
-  _ -> lift $ Left "invalid operands"
+    Right _ -> throwError $ RuntimeError "internal error"
+  _ -> throwError $ RuntimeError "invalid operands"
 
 evalNeq :: Value -> Value -> Eval Value
 evalNeq va vb = do
   v <- evalEq va vb
   case v of
     VBool b -> return (VBool (not b))
-    _ -> lift $ Left "internal error"
+    _ -> throwError $ RuntimeError "internal error"
 
 evalBoolBin :: (Bool -> Bool -> Bool) -> Value -> Value -> Eval Value
 evalBoolBin op va vb = case (va, vb) of
   (VBool a, VBool b) -> return (VBool (op a b))
-  _ -> lift $ Left "invalid operands"
+  _ -> throwError $ RuntimeError "invalid operands"
 
 evalVarExpr :: String -> Eval Value
 evalVarExpr n = do
   env <- get
   case Map.lookup n env of
     Just v -> return v
-    Nothing -> lift $ Left ("undefined variable" ++ n)
+    Nothing -> throwError $ RuntimeError ("undefined variable: " ++ n)
 
-evalDeclExpr :: String -> Maybe Type -> Maybe Expr -> Eval Value
+evalDeclExpr :: String -> Maybe Type -> Maybe TypedExpr -> Eval Value
 evalDeclExpr n mt me = do
   val <- case me of
     Just e -> evalExpr e
     Nothing -> case mt of
       Just t -> return (defaultValue t)
-      Nothing -> lift $ Left "declaration lacks both type and initializer"
+      Nothing -> throwError $ RuntimeError "declaration lacks both type and initializer"
   modify (Map.insert n val)
   return VUnit
 
-evalReplInput :: Repl -> Eval Value
+evalReplInput :: Repl Type -> Eval Value
 evalReplInput = \case
   ReplExpr e -> evalExpr e
-  ReplStmt e -> evalExpr e >> return VUnit
+  ReplStmt s -> evalStmt s >> return VUnit
 
-evalProgram :: Program -> Eval Value
+evalProgram :: TypedProgram -> Eval Value
 evalProgram (Program stmts) = mapM_ evalTopLevel stmts >> return VUnit
 
-evalTopLevel :: TopLevel -> Eval Value
-evalTopLevel (TopLevelStmt expr) = evalExpr expr
+evalTopLevel :: TypedTopLevel -> Eval Value
+evalTopLevel (TopLevelStmt stmt) = evalStmt stmt
 
 defaultValue :: Type -> Value
 defaultValue = \case

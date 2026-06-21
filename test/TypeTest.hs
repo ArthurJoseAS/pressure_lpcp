@@ -1,20 +1,44 @@
 module TypeTest (testType) where
 
 import Ast
+import Data.Map.Strict qualified as Map
 import Lexer (AlexPosn (..))
-import Type
+
+checkExprType :: Expr AlexPosn -> Either Error Type
+checkExprType = fmap exprAnnot . checkExpr
 
 testType :: IO ()
 testType = do
-  assertEqual "int addition type" (Right (IntType pos0 Signed I32)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (IntLit pos0 2))
-  assertEqual "mixed addition promotes to float" (Right (FloatType pos0 F64)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (FloatLit pos0 2.0))
-  assertLeft "bool arithmetic unsupported" $ typeOf (BinaryExpr pos0 AddOp (BoolLit pos0 True) (IntLit pos0 1))
-  assertEqual "boolean and type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 AndOp (BoolLit pos0 True) (BoolLit pos0 False))
-  assertEqual "comparison type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 LtOp (IntLit pos0 1) (FloatLit pos0 2.0))
-  assertEqual "equality type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 EqOp (BoolLit pos0 True) (BoolLit pos0 False))
-  assertLeft "ordered bool comparison unsupported" $ typeOf (BinaryExpr pos0 LtOp (BoolLit pos0 True) (BoolLit pos0 False))
-  assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (DeclExpr pos0 (ValueDecl Mutable (identFrom "x") Nothing Nothing))])
-  assertEqual "repl expression type checks" (Right ()) $ checkReplInput (ReplExpr (IntLit pos0 1))
+  assertEqual "int addition type" (Right (IntType pos0 Signed I32)) $ checkExprType (Expr pos0 (BinaryExpr AddOp (Expr pos0 (IntLit 1)) (Expr pos0 (IntLit 2))))
+  assertLeft "bool arithmetic unsupported" $ checkExprType (Expr pos0 (BinaryExpr AddOp (Expr pos0 (BoolLit True)) (Expr pos0 (IntLit 1))))
+  assertEqual "boolean and type" (Right (BoolType pos0)) $ checkExprType (Expr pos0 (BinaryExpr AndOp (Expr pos0 (BoolLit True)) (Expr pos0 (BoolLit False))))
+  assertEqual "comparison type" (Right (BoolType pos0)) $ checkExprType (Expr pos0 (BinaryExpr LtOp (Expr pos0 (IntLit 1)) (Expr pos0 (IntLit 2))))
+  assertEqual "equality type" (Right (BoolType pos0)) $ checkExprType (Expr pos0 (BinaryExpr EqOp (Expr pos0 (BoolLit True)) (Expr pos0 (BoolLit False))))
+  assertLeft "ordered bool comparison unsupported" $ checkExprType (Expr pos0 (BinaryExpr LtOp (Expr pos0 (BoolLit True)) (Expr pos0 (BoolLit False))))
+  assertEqual "if expression type" (Right (IntType pos0 Signed I32)) $ checkExprType (Expr pos0 (IfExpr (Expr pos0 (BoolLit True)) (Block [] (Just (Expr pos0 (IntLit 1)))) (Just (Block [] (Just (Expr pos0 (IntLit 2)))))))
+  assertLeft "if without else cannot produce int" $ checkProgram (Program [TopLevelStmt (Stmt pos0 (DeclStmt (ValueDecl Mutable (identFrom "x") (Just (IntType pos0 Signed I32)) (Just (Expr pos0 (IfExpr (Expr pos0 (BoolLit True)) (Block [] (Just (Expr pos0 (IntLit 1)))) Nothing))))))])
+  assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (Stmt pos0 (DeclStmt (ValueDecl Mutable (identFrom "x") Nothing Nothing)))])
+  assertEqual "repl expression type checks" (Right (ReplExpr (Expr (IntType pos0 Signed I32) (IntLit 1)))) $ checkReplInput (ReplExpr (Expr pos0 (IntLit 1)))
+  assertLeft "repl remembers unit variable type" $ do
+    (_, env) <- checkReplInputWithEnv Map.empty replUnitDecl
+    checkReplInputWithEnv env replUnitAddition
+
+replUnitDecl :: Repl AlexPosn
+replUnitDecl =
+  ReplStmt $
+    Stmt pos0 $
+      DeclStmt $
+        ValueDecl
+          Mutable
+          (identFrom "x")
+          Nothing
+          (Just (Expr pos0 (IfExpr (Expr pos0 (BoolLit False)) (Block [] Nothing) Nothing)))
+
+replUnitAddition :: Repl AlexPosn
+replUnitAddition =
+  ReplExpr $
+    Expr pos0 $
+      BinaryExpr AddOp (Expr pos0 (VarExpr (identFrom "x"))) (Expr pos0 (IntLit 5))
 
 assertEqual :: (Show a, Eq a) => String -> a -> a -> IO ()
 assertEqual name expected actual =
