@@ -7,17 +7,23 @@
 ## Language
 
 - [x] Add support for conditionals (grammar, interpreter)
-- [ ] Add support for loops (grammar, interpreter)
-- [ ] Add support for functions (grammar, interpreter)
+- [x] Add support for functions (grammar, interpreter)
+- [ ] Add support for recursion - Lima
+- [ ] Syntactic sugar for `else if`. - Victor
+- [ ] Add support for loops (grammar, interpreter) - Lima
+- [ ] Add support for arrays (grammar, interpreter) - Skeete
 - [ ] Add support for pointers (grammar, interpreter)
-- [ ] Add support for structs (grammar, interpreter)
+- [ ] Add support for structs (grammar, interpreter) - Samuel
 - [ ] Add support for enums (grammar, interpreter)
 - [ ] Add support for pattern matching (grammar, interpreter)
 - [ ] Add support for imports (grammar, interpreter)
 
 ### Std
 
-- [ ] Implement builtin std with print, len, etc.
+- [ ] Implement print*.
+- [ ] Implement read*.
+- [ ] Implement alloc*.
+- [ ] Implement free*.
 
 ## REPL
 
