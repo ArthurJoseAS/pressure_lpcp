@@ -24,8 +24,19 @@ import Ast
   enum          { KwEnum _ }
   return        { KwReturn _ }
   int           { KwInt _ }
+  uint          { KwUint _ }
   float         { KwFloat _ }
   bool          { KwBool _ }
+  i8            { KwI8 _ }
+  i16           { KwI16 _ }
+  i32           { KwI32 _ }
+  i64           { KwI64 _ }
+  u8            { KwU8 _ }
+  u16           { KwU16 _ }
+  u32           { KwU32 _ }
+  u64           { KwU64 _ }
+  f32           { KwF32 _ }
+  f64           { KwF64 _ }
   '='           { Equal _ }
   '<'           { Lt _ }
   '>'           { Gt _ }
@@ -84,11 +95,40 @@ Type : ID       { TypeName (toIdent $1) }
      | TypeLit  { $1 }
 
 TypeLit : bool  { BoolType (token_posn $1) }
-        | int   { IntType (token_posn $1) }
-        | float { FloatType (token_posn $1) }
+        | int   { IntType (token_posn $1) Signed I32 }
+        | uint  { IntType (token_posn $1) Unsigned I32 }
+        | float { FloatType (token_posn $1) F64 }
+        | i8    { IntType (token_posn $1) Signed I8 }
+        | i16   { IntType (token_posn $1) Signed I16 }
+        | i32   { IntType (token_posn $1) Signed I32 }
+        | i64   { IntType (token_posn $1) Signed I64 }
+        | u8    { IntType (token_posn $1) Unsigned I8 }
+        | u16   { IntType (token_posn $1) Unsigned I16 }
+        | u32   { IntType (token_posn $1) Unsigned I32 }
+        | u64   { IntType (token_posn $1) Unsigned I64 }
+        | f32   { FloatType (token_posn $1) F32 }
+        | f64   { FloatType (token_posn $1) F64 }
+
+{- expressions -}
 
 Expr : ValueDecl { DeclExpr (declPos $1) $1 }
-     | AddExpr { $1 }
+     | LogicalOrExpr { $1 }
+
+LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { BinaryExpr (token_posn $2) OrOp $1 $3 }
+              | LogicalAndExpr                  { $1 }
+
+LogicalAndExpr : LogicalAndExpr and ComparisonExpr { BinaryExpr (token_posn $2) AndOp $1 $3 }
+               | ComparisonExpr                    { $1 }
+
+ComparisonExpr : AddExpr CompareOp AddExpr { let (pos, op) = $2 in BinaryExpr pos op $1 $3 }
+               | AddExpr                   { $1 }
+
+CompareOp : '==' { (token_posn $1, EqOp) }
+          | '!=' { (token_posn $1, NeqOp) }
+          | '<'  { (token_posn $1, LtOp) }
+          | '<=' { (token_posn $1, LeqOp) }
+          | '>'  { (token_posn $1, GtOp) }
+          | '>=' { (token_posn $1, GeqOp) }
 
 AddExpr : AddExpr '+' MulExpr { BinaryExpr (token_posn $2) AddOp $1 $3 }
         | AddExpr '-' MulExpr { BinaryExpr (token_posn $2) SubOp $1 $3 }

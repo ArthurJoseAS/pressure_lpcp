@@ -87,7 +87,7 @@ testIntLit = do
       Right (val, env) -> do
         if val == VUnit then return () else error $ "expected VUnit got " ++ show val
         case Map.lookup "x" env of
-          Just (VInt 42) -> return ()
+          Just (VInt Signed I32 42) -> return ()
           other -> error $ "expected x = 42, got " ++ show other
 
 testFloatLit :: IO ()
@@ -98,7 +98,7 @@ testFloatLit = do
       Left err -> error $ "float literal eval failed: " ++ err
       Right (_, env) ->
         case Map.lookup "x" env of
-          Just (VFloat 3.14) -> return ()
+          Just (VFloat F64 3.14) -> return ()
           other -> error $ "expected 3.14, got " ++ show other
 
 testBoolLit :: IO ()
@@ -178,7 +178,7 @@ testVarDeclAndLookup = do
       Right () -> do
         case runStateT (evalProgram ast) Map.empty of
           Right (_, env) ->
-            assertExpr "x after decl" (VarExpr pos0 (identFrom "x")) env (VInt 42)
+            assertExpr "x after decl" (VarExpr pos0 (identFrom "x")) env (VInt Signed I32 42)
           Left err -> error $ "eval failed: " ++ err
       Left err -> error $ "type check failed: " ++ show err
 
@@ -194,7 +194,7 @@ testVarDefaultValue = do
         case runStateT (evalProgram ast) Map.empty of
           Right (_, env) ->
             case Map.lookup "x" env of
-              Just (VInt 0) -> return ()
+              Just (VInt Signed I32 0) -> return ()
               other -> error $ "expected x = 0 for uninitialized int, got " ++ show other
           Left err -> error $ "eval failed: " ++ err
       Left err -> error $ "type check failed: " ++ show err
@@ -217,7 +217,7 @@ testMixedSubEval =
     "mixed subtraction eval"
     (BinaryExpr pos0 SubOp (FloatLit pos0 8.5) (IntLit pos0 3))
     Map.empty
-    (VFloat 5.5)
+    (VFloat F64 5.5)
 
 testBoolDefaultValue :: IO ()
 testBoolDefaultValue = do

@@ -38,6 +38,16 @@ tokens :-
   float                              { mkToken KwFloat }
   bool                               { mkToken KwBool }
   byte                               { mkToken KwByte }
+  i8                                 { mkToken KwI8 }
+  i16                                { mkToken KwI16 }
+  i32                                { mkToken KwI32 }
+  i64                                { mkToken KwI64 }
+  u8                                 { mkToken KwU8 }
+  u16                                { mkToken KwU16 }
+  u32                                { mkToken KwU32 }
+  u64                                { mkToken KwU64 }
+  f32                                { mkToken KwF32 }
+  f64                                { mkToken KwF64 }
   \=                                 { mkToken Equal }
   \<                                 { mkToken Lt }
   \>                                 { mkToken Gt }
@@ -93,6 +103,16 @@ data Token
   | KwFloat AlexPosn
   | KwBool AlexPosn
   | KwByte AlexPosn
+  | KwI8 AlexPosn
+  | KwI16 AlexPosn
+  | KwI32 AlexPosn
+  | KwI64 AlexPosn
+  | KwU8 AlexPosn
+  | KwU16 AlexPosn
+  | KwU32 AlexPosn
+  | KwU64 AlexPosn
+  | KwF32 AlexPosn
+  | KwF64 AlexPosn
   | Equal AlexPosn
   | Lt AlexPosn
   | Gt AlexPosn
@@ -146,6 +166,16 @@ token_posn (KwUint p)   = p
 token_posn (KwFloat p)   = p
 token_posn (KwBool p)   = p
 token_posn (KwByte p)   = p
+token_posn (KwI8 p)     = p
+token_posn (KwI16 p)    = p
+token_posn (KwI32 p)    = p
+token_posn (KwI64 p)    = p
+token_posn (KwU8 p)     = p
+token_posn (KwU16 p)    = p
+token_posn (KwU32 p)    = p
+token_posn (KwU64 p)    = p
+token_posn (KwF32 p)    = p
+token_posn (KwF64 p)    = p
 token_posn (Equal p)      = p
 token_posn (Lt p)         = p
 token_posn (Gt p)         = p

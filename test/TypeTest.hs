@@ -6,9 +6,13 @@ import Type
 
 testType :: IO ()
 testType = do
-  assertEqual "int addition type" (Right (IntType pos0)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (IntLit pos0 2))
-  assertEqual "mixed addition promotes to float" (Right (FloatType pos0)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (FloatLit pos0 2.0))
+  assertEqual "int addition type" (Right (IntType pos0 Signed I32)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (IntLit pos0 2))
+  assertEqual "mixed addition promotes to float" (Right (FloatType pos0 F64)) $ typeOf (BinaryExpr pos0 AddOp (IntLit pos0 1) (FloatLit pos0 2.0))
   assertLeft "bool arithmetic unsupported" $ typeOf (BinaryExpr pos0 AddOp (BoolLit pos0 True) (IntLit pos0 1))
+  assertEqual "boolean and type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 AndOp (BoolLit pos0 True) (BoolLit pos0 False))
+  assertEqual "comparison type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 LtOp (IntLit pos0 1) (FloatLit pos0 2.0))
+  assertEqual "equality type" (Right (BoolType pos0)) $ typeOf (BinaryExpr pos0 EqOp (BoolLit pos0 True) (BoolLit pos0 False))
+  assertLeft "ordered bool comparison unsupported" $ typeOf (BinaryExpr pos0 LtOp (BoolLit pos0 True) (BoolLit pos0 False))
   assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (DeclExpr pos0 (ValueDecl Mutable (identFrom "x") Nothing Nothing))])
   assertEqual "repl expression type checks" (Right ()) $ checkReplInput (ReplExpr (IntLit pos0 1))
 

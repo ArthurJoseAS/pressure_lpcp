@@ -20,42 +20,42 @@ testParseProgram = do
     assertRight "parse mutable declaration" $
       runAlex "x: i32 = 42;" parseProgram
   case ast of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (IntLit _ _))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (IntLit _ _))))] -> return ()
     other -> error $ "unexpected AST for mutable declaration: " ++ show other
 
   ast2 <-
     assertRight "parse constant declaration" $
       runAlex "y: i32 : 7;" parseProgram
   case ast2 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Constant _ (Just (TypeName _)) (Just (IntLit _ _))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Constant _ (Just (IntType _ _ _)) (Just (IntLit _ _))))] -> return ()
     other -> error $ "unexpected AST for constant declaration: " ++ show other
 
   ast4 <-
     assertRight "parse addition expression" $
       runAlex "sum: i32 = 1 + 2 + 3;" parseProgram
   case ast4 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ AddOp (BinaryExpr _ AddOp (IntLit _ 1) (IntLit _ 2)) (IntLit _ 3)))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (BinaryExpr _ AddOp (BinaryExpr _ AddOp (IntLit _ 1) (IntLit _ 2)) (IntLit _ 3)))))] -> return ()
     other -> error $ "unexpected AST for addition expression: " ++ show other
 
   ast5 <-
     assertRight "parse multiplication precedence" $
       runAlex "value: i32 = 1 + 2 * 3;" parseProgram
   case ast5 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ AddOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (BinaryExpr _ AddOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))))))] -> return ()
     other -> error $ "unexpected AST for multiplication precedence: " ++ show other
 
   ast6 <-
     assertRight "parse division expression" $
       runAlex "value: i32 = 8 / 4 / 2;" parseProgram
   case ast6 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ DivOp (BinaryExpr _ DivOp (IntLit _ 8) (IntLit _ 4)) (IntLit _ 2)))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (BinaryExpr _ DivOp (BinaryExpr _ DivOp (IntLit _ 8) (IntLit _ 4)) (IntLit _ 2)))))] -> return ()
     other -> error $ "unexpected AST for division expression: " ++ show other
 
   ast7 <-
     assertRight "parse parenthesized expression" $
       runAlex "value: i32 = (1 + 2) * 3;" parseProgram
   case ast7 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ MulOp (BinaryExpr _ AddOp (IntLit _ 1) (IntLit _ 2)) (IntLit _ 3)))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (BinaryExpr _ MulOp (BinaryExpr _ AddOp (IntLit _ 1) (IntLit _ 2)) (IntLit _ 3)))))] -> return ()
     other -> error $ "unexpected AST for parenthesized expression: " ++ show other
 
   ast8 <-
@@ -76,8 +76,22 @@ testParseProgram = do
     assertRight "parse subtraction precedence" $
       runAlex "value: i32 = 1 - 2 * 3;" parseProgram
   case ast10 of
-    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (TypeName _)) (Just (BinaryExpr _ SubOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))))))] -> return ()
+    Program [TopLevelStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (BinaryExpr _ SubOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))))))] -> return ()
     other -> error $ "unexpected AST for subtraction precedence: " ++ show other
+
+  ast11 <-
+    assertRight "parse boolean precedence" $
+      runAlex "true or false and 1 < 2;" parseProgram
+  case ast11 of
+    Program [TopLevelStmt (BinaryExpr _ OrOp (BoolLit _ True) (BinaryExpr _ AndOp (BoolLit _ False) (BinaryExpr _ LtOp (IntLit _ 1) (IntLit _ 2))))] -> return ()
+    other -> error $ "unexpected AST for boolean precedence: " ++ show other
+
+  ast12 <-
+    assertRight "parse comparison after arithmetic" $
+      runAlex "1 + 2 * 3 == 7;" parseProgram
+  case ast12 of
+    Program [TopLevelStmt (BinaryExpr _ EqOp (BinaryExpr _ AddOp (IntLit _ 1) (BinaryExpr _ MulOp (IntLit _ 2) (IntLit _ 3))) (IntLit _ 7))] -> return ()
+    other -> error $ "unexpected AST for comparison precedence: " ++ show other
 
 testParseRepl :: IO ()
 testParseRepl = do
@@ -85,14 +99,14 @@ testParseRepl = do
     assertRight "repl: declaration without semicolon" $
       runAlex "x: int = 42" parseRepl
   case ast of
-    ReplExpr (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _)) (Just (IntLit _ 42)))) -> return ()
+    ReplExpr (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (IntLit _ 42)))) -> return ()
     other -> error $ "unexpected AST for repl declaration: " ++ show other
 
   ast2 <-
     assertRight "repl: declaration with semicolon" $
       runAlex "x: int = 42;" parseRepl
   case ast2 of
-    ReplStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _)) (Just (IntLit _ 42)))) -> return ()
+    ReplStmt (DeclExpr _ (ValueDecl Mutable _ (Just (IntType _ _ _)) (Just (IntLit _ 42)))) -> return ()
     other -> error $ "unexpected AST for repl declaration stmt: " ++ show other
 
   ast3 <-
@@ -127,6 +141,7 @@ testParseErrors :: IO ()
 testParseErrors = do
   assertLeft "program requires semicolon" $ runAlex "1 + 2" parseProgram
   assertLeft "malformed expression" $ runAlex "x: int = 1 + ;" parseProgram
+  assertLeft "chained comparisons are forbidden" $ runAlex "1 < 2 < 3;" parseProgram
 
 assertLeft :: String -> Either String a -> IO ()
 assertLeft _ (Left _) = return ()

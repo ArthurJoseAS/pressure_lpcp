@@ -64,7 +64,7 @@ data Error
   deriving (Show, Eq)
 
 liftEval :: Eval Value -> REPL Value
-liftEval = mapStateT $ liftEither . (first RuntimeError)
+liftEval = mapStateT $ liftEither . first RuntimeError
 
 render :: Error -> String
 render = \case

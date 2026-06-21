@@ -5,6 +5,9 @@ module Ast
     Decl (..),
     Ident (..),
     Mutability (..),
+    Sign (..),
+    IntSize (..),
+    FloatSize (..),
     Type (..),
     BinaryOp (..),
     Expr (..),
@@ -14,10 +17,10 @@ where
 
 import Lexer (AlexPosn)
 
-data Program = Program [TopLevel]
+newtype Program = Program [TopLevel]
   deriving (Show, Eq)
 
-data TopLevel = TopLevelStmt Expr
+newtype TopLevel = TopLevelStmt Expr
   deriving (Show, Eq)
 
 data Repl
@@ -35,11 +38,20 @@ data Ident = Ident AlexPosn String
 data Mutability = Mutable | Constant
   deriving (Show, Eq)
 
+data Sign = Signed | Unsigned
+  deriving (Show, Eq)
+
+data IntSize = I8 | I16 | I32 | I64
+  deriving (Show, Eq)
+
+data FloatSize = F32 | F64
+  deriving (Show, Eq)
+
 data Type
   = TypeName Ident
   | BoolType AlexPosn
-  | IntType AlexPosn
-  | FloatType AlexPosn
+  | IntType AlexPosn Sign IntSize
+  | FloatType AlexPosn FloatSize
   | UnitType
   deriving (Show, Eq)
 
@@ -48,6 +60,14 @@ data BinaryOp
   | SubOp
   | MulOp
   | DivOp
+  | AndOp
+  | OrOp
+  | EqOp
+  | NeqOp
+  | LtOp
+  | LeqOp
+  | GtOp
+  | GeqOp
   deriving (Show, Eq)
 
 data Expr
@@ -60,8 +80,8 @@ data Expr
   deriving (Show, Eq)
 
 data Value
-  = VInt Integer
-  | VFloat Double
+  = VInt Sign IntSize Integer
+  | VFloat FloatSize Double
   | VBool Bool
   | VUnit
   | VEmpty
@@ -69,8 +89,9 @@ data Value
 
 instance Show Value where
   show = \case
-    VInt i -> show i
-    VFloat f -> show f
-    VBool b -> show b
+    VInt _ _ i -> show i
+    VFloat _ f -> show f
+    VBool True -> "true"
+    VBool False -> "false"
     VUnit -> "()"
     VEmpty -> undefined
