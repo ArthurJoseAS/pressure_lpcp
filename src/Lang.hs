@@ -9,18 +9,13 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Eval (Env, Eval, evalReplInput)
 import Eval qualified
-import Parser (genAst, parseRepl)
+import Lexer (AlexPosn (..), prettyPosn)
+import Parser (genAst, parseErrorInfo, parseRepl)
 import System.IO (hFlush, isEOF, stdout)
-
--- TODO: Separate REPL into separate module and add support for control characters.
 
 type ReplState = (Env, Type.TypeEnv)
 
 type REPL a = StateT ReplState (ExceptT Error IO) a
-
-handleError :: Error -> REPL ()
-handleError Exit = lift $ throwError Exit
-handleError err = liftIO $ putStrLn $ render err
 
 repl :: IO ()
 repl = do
@@ -28,14 +23,11 @@ repl = do
   putStrLn "Goodbye!"
 
 replLoop :: REPL ()
-replLoop = forever $ replStep `catchError` handleError
-
-run :: String -> IO ()
-run input = do
-  _ <- runExceptT $ evalStateT (run' `catchError` handleError) ([], [])
-  return ()
+replLoop = forever $ replStep `catchError` handleReplExit
   where
-    run' = eval input >> return ()
+    handleReplExit :: Error -> REPL ()
+    handleReplExit Exit = lift $ throwError Exit
+    handleReplExit _ = return ()
 
 replStep :: REPL ()
 replStep = do
@@ -44,10 +36,25 @@ replStep = do
   when done $ lift $ throwError Exit
   line <- liftIO getLine
   when (trim line == ":q") $ lift $ throwError Exit
-  (val, ast) <- eval line
-  liftIO $ case ast of
-    ReplExpr _ -> print val
-    ReplStmt _ -> return ()
+  ( do
+      (val, ast) <- eval line
+      liftIO $ case ast of
+        ReplExpr _ -> print val
+        ReplStmt _ -> return ()
+    )
+    `catchError` \err -> case err of
+      Exit -> lift $ throwError Exit
+      _ -> handleError line err
+
+run :: String -> IO ()
+run input = do
+  _ <- runExceptT $ evalStateT (run' `catchError` \err -> handleError input err) ([], [])
+  return ()
+  where
+    run' = eval input >> return ()
+
+handleError :: String -> Error -> REPL ()
+handleError source err = liftIO $ putStrLn $ render source err
 
 eval :: String -> REPL (Value, ParsedRepl)
 eval input = do
@@ -55,7 +62,6 @@ eval input = do
   (_, typeEnv) <- get
   (typedAst, nextTypeEnv) <- liftEither $ first TypeError $ Type.checkReplInputWithEnv typeEnv ast
   val <- liftEval nextTypeEnv $ evalReplInput typedAst
-
   return (val, ast)
 
 data Error
@@ -74,12 +80,28 @@ liftEval nextTypeEnv action = do
       put (nextEnv, nextTypeEnv)
       return val
 
-render :: Error -> String
-render = \case
-  ParseError e -> "parser error: " ++ e
-  TypeError e -> "type error: " ++ show e
-  RuntimeError e -> "runtime error: " ++ show e
-  Exit -> ""
+render :: String -> Error -> String
+render source err =
+  let (mPos, msg) = case err of
+        ParseError e -> parseErrorInfo e
+        TypeError e ->
+          let (pos, m) = Type.errorInfo e
+           in (Just pos, m)
+        RuntimeError e -> Eval.errorInfo e
+        Exit -> (Nothing, "")
+      header = case mPos of
+        Just pos -> prettyPosn pos ++ ": " ++ msg
+        Nothing -> msg
+      snippet = maybe "" (sourceSnippet source) mPos
+   in if null header then "" else header ++ "\n" ++ snippet
+
+sourceSnippet :: String -> AlexPosn -> String
+sourceSnippet source (AlexPn _ line col) =
+  let srcLines = lines source
+      targetLine = if line > 0 && line <= length srcLines then srcLines !! (line - 1) else ""
+      caret = replicate (max 0 (col - 1)) ' ' ++ "^"
+      indent = "  "
+   in indent ++ targetLine ++ "\n" ++ indent ++ caret
 
 trim :: String -> String
 trim = f . f

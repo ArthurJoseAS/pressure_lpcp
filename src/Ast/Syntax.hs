@@ -25,10 +25,15 @@ module Ast.Syntax
     Expr (..),
     ExprKind (..),
     Value (..),
+    prettyType,
+    typePosn,
+    prettyBinaryOp,
+    prettyUnaryOp,
   )
 where
 
-import Lexer (AlexPosn)
+import Data.List (intercalate)
+import Lexer (AlexPosn (..))
 
 newtype Program a = Program [TopLevel a]
   deriving (Show, Eq)
@@ -187,3 +192,51 @@ instance Show Value where
     VUnit -> "()"
     VFunction {} -> "<function>"
     VEmpty -> undefined
+
+prettyType :: Type -> String
+prettyType = \case
+  TypeName (Ident _ name) -> name
+  BoolType _ -> "bool"
+  IntType _ Signed I8 -> "i8"
+  IntType _ Signed I16 -> "i16"
+  IntType _ Signed I32 -> "i32"
+  IntType _ Signed I64 -> "i64"
+  IntType _ Unsigned I8 -> "u8"
+  IntType _ Unsigned I16 -> "u16"
+  IntType _ Unsigned I32 -> "u32"
+  IntType _ Unsigned I64 -> "u64"
+  FloatType _ F32 -> "f32"
+  FloatType _ F64 -> "f64"
+  FnType _ params ret ->
+    "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
+  UnitType -> "()"
+
+typePosn :: Type -> AlexPosn
+typePosn = \case
+  TypeName (Ident pos _) -> pos
+  BoolType pos -> pos
+  IntType pos _ _ -> pos
+  FloatType pos _ -> pos
+  FnType pos _ _ -> pos
+  UnitType -> AlexPn 0 1 1
+
+prettyBinaryOp :: BinaryOp -> String
+prettyBinaryOp = \case
+  AddOp -> "+"
+  SubOp -> "-"
+  MulOp -> "*"
+  DivOp -> "/"
+  AndOp -> "and"
+  OrOp -> "or"
+  EqOp -> "=="
+  NeqOp -> "!="
+  LtOp -> "<"
+  LeqOp -> "<="
+  GtOp -> ">"
+  GeqOp -> ">="
+
+prettyUnaryOp :: UnaryOp -> String
+prettyUnaryOp = \case
+  NegOp -> "-"
+  NotOp -> "!"
+  AmpersandOp -> "&"

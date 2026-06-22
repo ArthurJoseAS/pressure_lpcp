@@ -3,15 +3,20 @@ module Ast.ErrorTest
     testBoolInArithmeticRightError,
     testTypeMismatchError,
     testFloatNarrowingError,
-    testVarUndefined,
+    testUndefinedVariableTypeError,
     testMissingAnnotationError,
     testDuplicateParamsRejected,
     testDuplicateFunctionsRejected,
     testDuplicateDeclarationsRejected,
+    testTypeErrorMessageFormat,
+    testRuntimeErrorMessageFormat,
   )
 where
 
-import Ast hiding (Error)
+import Ast hiding (Error, UndefinedVariable)
+import Ast.Typecheck qualified as T
+import Eval qualified as Eval
+import Lexer (AlexPosn (..))
 import TestUtil
 
 testBoolInArithmeticError :: IO ()
@@ -26,9 +31,8 @@ testTypeMismatchError = checkErr "type mismatch" "x: bool = 42;"
 testFloatNarrowingError :: IO ()
 testFloatNarrowingError = checkErr "float to int narrowing" "x: int = 3.14;"
 
-testVarUndefined :: IO ()
-testVarUndefined =
-  assertEvalError "undefined variable" (Expr UnitType (VarExpr (identFrom "z"))) emptyEnv (RuntimeError "undefined variable: z")
+testUndefinedVariableTypeError :: IO ()
+testUndefinedVariableTypeError = checkErr "undefined variable" "x: int = y;"
 
 testMissingAnnotationError :: IO ()
 testMissingAnnotationError =
@@ -47,3 +51,25 @@ testDuplicateFunctionsRejected = do
 testDuplicateDeclarationsRejected :: IO ()
 testDuplicateDeclarationsRejected = do
   checkErr "duplicate declarations" "x :: 1; x :: 2;"
+
+testTypeErrorMessageFormat :: IO ()
+testTypeErrorMessageFormat = do
+  let pos = AlexPn 0 1 10
+  let (p, m) = T.errorInfo (T.TypeMismatch pos (IntType (AlexPn 0 1 1) Signed I32) (BoolType (AlexPn 0 1 1)))
+  assertEqual "type mismatch pos" pos p
+  assertEqual "type mismatch text" "type mismatch: expected 'i32', found 'bool'" m
+
+  let (p2, m2) = T.errorInfo (T.UnsupportedOp pos AddOp (IntType (AlexPn 0 1 1) Signed I32) (BoolType (AlexPn 0 1 5)))
+  assertEqual "unsupported op pos" pos p2
+  assertEqual "unsupported op text" "cannot use operator '+' on type 'i32' and 'bool'" m2
+
+  let (p3, m3) = T.errorInfo (T.UndefinedVariable pos "foo")
+  assertEqual "type undefined pos" pos p3
+  assertEqual "type undefined text" "undefined variable 'foo'" m3
+
+testRuntimeErrorMessageFormat :: IO ()
+testRuntimeErrorMessageFormat = do
+  let pos = AlexPn 0 1 10
+  let (mPos, m) = Eval.errorInfo (RuntimeError (DivisionByZero pos))
+  assertEqual "runtime div by zero pos" (Just pos) mPos
+  assertEqual "runtime div by zero text" "division by zero" m

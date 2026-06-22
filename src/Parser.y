@@ -1,5 +1,5 @@
 {
-module Parser where
+module Parser (parseRepl, parseProgram, genAst, parseErrorInfo) where
 import Lexer
 import Ast.Syntax
 }
@@ -201,9 +201,16 @@ TypeLit : bool  { BoolType (token_posn $1) }
 {
 parseError :: Token -> Alex a
 parseError tok =
-  let AlexPn _ line col = token_posn tok
-  in alexError $ "at " ++ show line ++ ":" ++ show col
-              ++ ": unexpected " ++ show tok
+  let pos = token_posn tok
+  in alexError $ prettyPosn pos ++ ": unexpected " ++ prettyToken tok
+
+parseErrorInfo :: String -> (Maybe AlexPosn, String)
+parseErrorInfo s = case break (== ':') s of
+  (lineStr, ':' : rest) -> case break (== ':') rest of
+    (colStr, ':' : ' ' : msg) ->
+      (Just (AlexPn 0 (read lineStr) (read colStr)), msg)
+    _ -> (Nothing, s)
+  _ -> (Nothing, s)
 
 toIdent :: Token -> Ident
 toIdent (Id pos name) = Ident pos name

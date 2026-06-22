@@ -10,6 +10,8 @@ module Lexer
   , tokenize
   , tokenizeEither
   , token_posn
+  , prettyPosn
+  , prettyToken
   ) where
 }
 
@@ -252,4 +254,75 @@ tokenize input =
 
 lexer :: (Token -> Alex a) -> Alex a
 lexer cont = alexMonadScan >>= cont
+
+prettyPosn :: AlexPosn -> String
+prettyPosn (AlexPn _ line col) = show line ++ ":" ++ show col
+
+prettyToken :: Token -> String
+prettyToken = \case
+  TokenEOF -> "end of input"
+  KwIf _ -> "keyword 'if'"
+  KwElse _ -> "keyword 'else'"
+  KwTrue _ -> "keyword 'true'"
+  KwFalse _ -> "keyword 'false'"
+  KwFor _ -> "keyword 'for'"
+  KwContinue _ -> "keyword 'continue'"
+  KwBreak _ -> "keyword 'break'"
+  KwFn _ -> "keyword 'fn'"
+  KwStruct _ -> "keyword 'struct'"
+  KwEnum _ -> "keyword 'enum'"
+  KwReturn _ -> "keyword 'return'"
+  KwInt _ -> "keyword 'int'"
+  KwUint _ -> "keyword 'uint'"
+  KwFloat _ -> "keyword 'float'"
+  KwBool _ -> "keyword 'bool'"
+  KwByte _ -> "keyword 'byte'"
+  KwI8 _ -> "keyword 'i8'"
+  KwI16 _ -> "keyword 'i16'"
+  KwI32 _ -> "keyword 'i32'"
+  KwI64 _ -> "keyword 'i64'"
+  KwU8 _ -> "keyword 'u8'"
+  KwU16 _ -> "keyword 'u16'"
+  KwU32 _ -> "keyword 'u32'"
+  KwU64 _ -> "keyword 'u64'"
+  KwF32 _ -> "keyword 'f32'"
+  KwF64 _ -> "keyword 'f64'"
+  Equal _ -> "'='"
+  Lt _ -> "'<'"
+  Gt _ -> "'>'"
+  CmpEq _ -> "'=='"
+  CmpNeq _ -> "'!='"
+  CmpLeq _ -> "'<='"
+  CmpGeq _ -> "'>='"
+  ArrowRight _ -> "'->'"
+  AddAssign _ -> "'+='"
+  SubAssign _ -> "'-='"
+  MulAssign _ -> "'*='"
+  DivAssign _ -> "'/='"
+  KwAnd _ -> "keyword 'and'"
+  KwOr _ -> "keyword 'or'"
+  KwNot _ -> "'!'"
+  Ampersand _ -> "'&'"
+  Plus _ -> "'+'"
+  Minus _ -> "'-'"
+  ShiftRight _ -> "'>>'"
+  ShiftLeft _ -> "'<<'"
+  Times _ -> "'*'"
+  Div _ -> "'/'"
+  OpenPar _ -> "'('"
+  ClosePar _ -> "')'"
+  OpenBraces _ -> "'{'"
+  CloseBraces _ -> "'}'"
+  OpenBrack _ -> "'['"
+  CloseBrack _ -> "']'"
+  DoubleDot _ -> "'::'"
+  Dot _ -> "'.'"
+  Comma _ -> "','"
+  Semicolon _ -> "';'"
+  Colon _ -> "':'"
+  SingleQuote _ -> "\"'\""
+  DoubleQuote _ -> "'\"'"
+  Id _ name -> "identifier '" ++ name ++ "'"
+  IntLiteral _ i -> "integer literal '" ++ show i ++ "'"
+  FloatLiteral _ f -> "float literal '" ++ show f ++ "'"
 }

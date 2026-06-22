@@ -1,6 +1,6 @@
 module ParserTest (testParser) where
 
-import Parser.ErrorTest (testParseErrors)
+import Parser.ErrorTest (testParseErrorFormat, testParseErrors)
 import Parser.ProgramTest (testParseProgram)
 import Parser.ReplTest (testParseRepl)
 
@@ -9,3 +9,4 @@ testParser = do
   testParseProgram
   testParseRepl
   testParseErrors
+  testParseErrorFormat

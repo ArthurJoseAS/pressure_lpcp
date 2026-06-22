@@ -15,6 +15,8 @@ module Ast.Typecheck
     checkProgramTyped,
     checkReplInput,
     checkReplInputWithEnv,
+    errorPos,
+    errorInfo,
   )
 where
 
@@ -40,6 +42,35 @@ data Error
   | NotCallable AlexPosn Type
   | ArityMismatch AlexPosn Int Int
   deriving (Show, Eq)
+
+errorPos :: Error -> AlexPosn
+errorPos = \case
+  TypeMismatch pos _ _ -> pos
+  UnsupportedOp pos _ _ _ -> pos
+  UnsupportedUnaryOp pos _ _ -> pos
+  MissingAnnotation pos -> pos
+  DuplicateParams pos _ -> pos
+  DuplicateFunction pos _ -> pos
+  DuplicateDeclaration pos _ -> pos
+  UndefinedVariable pos _ -> pos
+  NotCallable pos _ -> pos
+  ArityMismatch pos _ _ -> pos
+
+errorInfo :: Error -> (AlexPosn, String)
+errorInfo err =
+  ( errorPos err,
+    case err of
+      TypeMismatch _ expected actual -> "type mismatch: expected '" ++ prettyType expected ++ "', found '" ++ prettyType actual ++ "'"
+      UnsupportedOp _ op t1 t2 -> "cannot use operator '" ++ prettyBinaryOp op ++ "' on type '" ++ prettyType t1 ++ "' and '" ++ prettyType t2 ++ "'"
+      UnsupportedUnaryOp _ op t -> "cannot use unary operator '" ++ prettyUnaryOp op ++ "' on type '" ++ prettyType t ++ "'"
+      MissingAnnotation _ -> "missing type annotation"
+      DuplicateParams _ name -> "duplicate parameter '" ++ name ++ "'"
+      DuplicateFunction _ name -> "duplicate function '" ++ name ++ "'"
+      DuplicateDeclaration _ name -> "duplicate declaration '" ++ name ++ "'"
+      UndefinedVariable _ name -> "undefined variable '" ++ name ++ "'"
+      NotCallable _ t -> "cannot call value of type '" ++ prettyType t ++ "'"
+      ArityMismatch _ expected actual -> "wrong number of arguments: expected " ++ show expected ++ ", got " ++ show actual
+  )
 
 type TypeEnv = [Map String Type]
 

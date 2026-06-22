@@ -1,5 +1,6 @@
 module Eval
   ( Error (..),
+    RuntimeError (..),
     Eval,
     Env,
     evalExpr,
@@ -7,6 +8,7 @@ module Eval
     evalBlock,
     evalReplInput,
     evalProgram,
+    errorInfo,
   )
 where
 
@@ -30,6 +32,7 @@ import Ast.Syntax
     Type (..),
     UnaryOp (..),
     Value (..),
+    typePosn,
   )
 import Ast.Typecheck (TypedBlock, TypedExpr, TypedProgram, TypedStmt)
 import Control.Monad.Except (Except, MonadError (throwError))
@@ -37,15 +40,35 @@ import Control.Monad.State (StateT, get, lift, modify, put)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
+import Lexer (AlexPosn (..), prettyPosn)
 
 -- Types
 
 data Error
-  = RuntimeError String
+  = RuntimeError RuntimeError
   | BreakSignal Value
   | ContinueSignal
   | ReturnSignal Value
   deriving (Eq, Show)
+
+data RuntimeError
+  = DivisionByZero AlexPosn
+  | Overflow AlexPosn
+  | Underflow AlexPosn
+  deriving (Eq, Show)
+
+panic :: String -> Eval a
+panic = error . ("panic: " ++)
+
+panicAt :: AlexPosn -> String -> Eval a
+panicAt pos msg = error $ prettyPosn pos ++ ": panic: " ++ msg
+
+errorInfo :: Error -> (Maybe AlexPosn, String)
+errorInfo = \case
+  RuntimeError (DivisionByZero pos) -> (Just pos, "division by zero")
+  RuntimeError (Overflow pos) -> (Just pos, "integer overflow")
+  RuntimeError (Underflow pos) -> (Just pos, "integer underflow")
+  _ -> (Nothing, "internal error: unexpected control flow")
 
 type Env = [Map String Value]
 
@@ -105,164 +128,161 @@ defaultValue = \case
   UnitType -> VUnit
   TypeName _ -> VEmpty
 
-liftMaybe :: Error -> Maybe a -> Eval a
-liftMaybe err = maybe (lift $ throwError err) pure
-
-withNumbers :: (RuntimeNumber -> RuntimeNumber -> Eval Value) -> Value -> Value -> Eval Value
-withNumbers f va vb =
+withNumbers :: AlexPosn -> (RuntimeNumber -> RuntimeNumber -> Eval Value) -> Value -> Value -> Eval Value
+withNumbers pos f va vb =
   case (asNumber va, asNumber vb) of
     (Just na, Just nb) -> f na nb
-    _ -> throwError $ RuntimeError "invalid operands"
+    _ -> panicAt pos "invalid operands reached evaluator"
 
 -- Expressions
 
 evalExpr :: TypedExpr -> Eval Value
-evalExpr (Expr _ kind) = case kind of
+evalExpr (Expr typ kind) = case kind of
   IntLit i -> return (VInt Signed I32 i)
   FloatLit f -> return (VFloat F64 f)
   BoolLit b -> return (VBool b)
-  UnaryExpr op e -> evalUnaryExpr op e
-  BinaryExpr op l r -> evalBinaryExpr op l r
-  VarExpr (Ident _ i) -> evalVarExpr i
-  IfExpr c t elseBlock -> evalIfExpr c t elseBlock
+  UnaryExpr op e -> evalUnaryExpr (typePosn typ) op e
+  BinaryExpr op l r -> evalBinaryExpr (typePosn typ) op l r
+  VarExpr (Ident pos i) -> evalVarExpr pos i
+  IfExpr c t elseBlock -> evalIfExpr (typePosn typ) c t elseBlock
   FnExpr params ret body -> evalFnExpr params ret body
-  CallExpr callee args -> evalCallExpr callee args
+  CallExpr callee args -> evalCallExpr (typePosn typ) callee args
 
-evalIfExpr :: TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
-evalIfExpr c t mElse = do
+evalIfExpr :: AlexPosn -> TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
+evalIfExpr pos c t mElse = do
   v <- evalExpr c
   case v of
     VBool True -> withScope (evalBlock t)
     VBool False -> maybe (return VUnit) (withScope . evalBlock) mElse
-    _ -> throwError $ RuntimeError "if condition must be bool"
+    _ -> panicAt pos "if condition must be bool reached evaluator"
 
-evalVarExpr :: String -> Eval Value
-evalVarExpr name = do
+evalVarExpr :: AlexPosn -> String -> Eval Value
+evalVarExpr pos name = do
   env <- get
   case lookupName name env of
     Just v -> return v
-    Nothing -> throwError $ RuntimeError ("undefined variable: " ++ name)
+    Nothing -> panicAt pos ("undefined variable '" ++ name ++ "' reached evaluator")
 
 evalFnExpr :: [Param] -> Type -> TypedBlock -> Eval Value
 evalFnExpr params ret body =
   return $ VFunction params ret body
 
-evalCallExpr :: TypedExpr -> [TypedExpr] -> Eval Value
-evalCallExpr callee args = do
+evalCallExpr :: AlexPosn -> TypedExpr -> [TypedExpr] -> Eval Value
+evalCallExpr pos callee args = do
   fn <- evalExpr callee
   argVals <- mapM evalExpr args
-  callValue fn argVals
+  callValue pos fn argVals
 
-callValue :: Value -> [Value] -> Eval Value
-callValue (VFunction params _ body) argVals = do
+callValue :: AlexPosn -> Value -> [Value] -> Eval Value
+callValue pos (VFunction params _ body) argVals = do
   if length params /= length argVals
-    then throwError $ RuntimeError "wrong number of arguments"
+    then panicAt pos ("wrong number of arguments: expected " ++ show (length params) ++ ", got " ++ show (length argVals))
     else do
       callerEnv <- get
       modify $ const $ bindArgs params argVals (pushScope (globalEnv callerEnv))
       val <- evalBlock body
       modify $ const callerEnv
       return val
-callValue _ _ = throwError $ RuntimeError "attempted to call non-function"
+callValue pos _ _ = panicAt pos "attempted to call non-function reached evaluator"
 
 bindArgs :: [Param] -> [Value] -> Env -> Env
 bindArgs params argVals env = foldl bind env (zip params argVals)
   where
     bind e (Param (Ident _ name) _, val) = bindInCurrentScope name val e
 
-evalUnaryExpr :: UnaryOp -> TypedExpr -> Eval Value
-evalUnaryExpr op e = do
+evalUnaryExpr :: AlexPosn -> UnaryOp -> TypedExpr -> Eval Value
+evalUnaryExpr pos op e = do
   ve <- evalExpr e
   case op of
     NegOp -> evalNumericUn negate negate ve
     NotOp -> evalBooleanUn not ve
-    AmpersandOp -> throwError $ RuntimeError "not implemented"
+    AmpersandOp -> panicAt pos "not implemented: unary '&'"
 
 evalNumericUn :: (Integer -> Integer) -> (Double -> Double) -> Value -> Eval Value
-evalNumericUn intOp floatOp v = do
-  n <- liftMaybe (RuntimeError "internal error") (asNumber v)
-  case n of
-    RuntimeInt s k i -> return (VInt s k (intOp i))
-    RuntimeFloat k d -> return (VFloat k (floatOp d))
+evalNumericUn intOp floatOp v =
+  case asNumber v of
+    Just (RuntimeInt s k i) -> return (VInt s k (intOp i))
+    Just (RuntimeFloat k d) -> return (VFloat k (floatOp d))
+    Nothing -> panic "expected number"
 
 evalBooleanUn :: (Bool -> Bool) -> Value -> Eval Value
 evalBooleanUn op = \case
   VBool b -> return (VBool $ op b)
-  _ -> throwError $ RuntimeError "internal error"
+  _ -> panic "expected bool"
 
-evalBinaryExpr :: BinaryOp -> TypedExpr -> TypedExpr -> Eval Value
-evalBinaryExpr op l r = do
+evalBinaryExpr :: AlexPosn -> BinaryOp -> TypedExpr -> TypedExpr -> Eval Value
+evalBinaryExpr pos op l r = do
   vl <- evalExpr l
   vr <- evalExpr r
   case op of
-    AddOp -> evalNumericBin (+) (+) vl vr
-    SubOp -> evalNumericBin (-) (-) vl vr
-    MulOp -> evalNumericBin (*) (*) vl vr
-    DivOp -> evalDiv vl vr
-    AndOp -> evalBoolBin (&&) vl vr
-    OrOp -> evalBoolBin (||) vl vr
-    EqOp -> evalEq vl vr
-    NeqOp -> evalNeq vl vr
-    LtOp -> evalNumericCmp (<) (<) vl vr
-    LeqOp -> evalNumericCmp (<=) (<=) vl vr
-    GtOp -> evalNumericCmp (>) (>) vl vr
-    GeqOp -> evalNumericCmp (>=) (>=) vl vr
+    AddOp -> evalNumericBin pos (+) (+) vl vr
+    SubOp -> evalNumericBin pos (-) (-) vl vr
+    MulOp -> evalNumericBin pos (*) (*) vl vr
+    DivOp -> evalDiv pos vl vr
+    AndOp -> evalBoolBin pos (&&) vl vr
+    OrOp -> evalBoolBin pos (||) vl vr
+    EqOp -> evalEq pos vl vr
+    NeqOp -> evalNeq pos vl vr
+    LtOp -> evalNumericCmp pos (<) (<) vl vr
+    LeqOp -> evalNumericCmp pos (<=) (<=) vl vr
+    GtOp -> evalNumericCmp pos (>) (>) vl vr
+    GeqOp -> evalNumericCmp pos (>=) (>=) vl vr
 
-evalNumericBin :: (Integer -> Integer -> Integer) -> (Double -> Double -> Double) -> Value -> Value -> Eval Value
-evalNumericBin intOp floatOp va vb = withNumbers go va vb
+evalNumericBin :: AlexPosn -> (Integer -> Integer -> Integer) -> (Double -> Double -> Double) -> Value -> Value -> Eval Value
+evalNumericBin pos intOp floatOp va vb = withNumbers pos go va vb
   where
     go (RuntimeInt s k a) (RuntimeInt _ _ b) = return (VInt s k (intOp a b))
     go (RuntimeFloat k a) (RuntimeFloat _ b) = return (VFloat k (floatOp a b))
-    go _ _ = throwError $ RuntimeError "internal error"
+    go _ _ = panic "type mismatch in numeric bin"
 
-evalDiv :: Value -> Value -> Eval Value
-evalDiv va vb = case vb of
-  VInt _ _ 0 -> throwError $ RuntimeError "division by zero"
-  VFloat _ 0 -> throwError $ RuntimeError "division by zero"
-  _ -> evalNumericBin div (/) va vb
+evalDiv :: AlexPosn -> Value -> Value -> Eval Value
+evalDiv pos va vb = case vb of
+  VInt _ _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
+  VFloat _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
+  _ -> evalNumericBin pos div (/) va vb
 
-evalNumericCmp :: (Integer -> Integer -> Bool) -> (Double -> Double -> Bool) -> Value -> Value -> Eval Value
-evalNumericCmp intCmp floatCmp va vb = withNumbers go va vb
+evalNumericCmp :: AlexPosn -> (Integer -> Integer -> Bool) -> (Double -> Double -> Bool) -> Value -> Value -> Eval Value
+evalNumericCmp pos intCmp floatCmp va vb = withNumbers pos go va vb
   where
     go (RuntimeInt _ _ a) (RuntimeInt _ _ b) = return (VBool (intCmp a b))
     go (RuntimeFloat _ a) (RuntimeFloat _ b) = return (VBool (floatCmp a b))
-    go _ _ = throwError $ RuntimeError "internal error"
+    go _ _ = panic "type mismatch in numeric cmp"
 
-evalEq :: Value -> Value -> Eval Value
-evalEq (VBool a) (VBool b) = return (VBool (a == b))
-evalEq va vb = withNumbers go va vb
+evalEq :: AlexPosn -> Value -> Value -> Eval Value
+evalEq _ (VBool a) (VBool b) = return (VBool (a == b))
+evalEq pos va vb = withNumbers pos go va vb
   where
     go (RuntimeInt _ _ a) (RuntimeInt _ _ b) = return (VBool (a == b))
     go (RuntimeFloat _ a) (RuntimeFloat _ b) = return (VBool (a == b))
-    go _ _ = throwError $ RuntimeError "internal error"
+    go _ _ = panic "type mismatch in eq"
 
-evalNeq :: Value -> Value -> Eval Value
-evalNeq va vb = do
-  v <- evalEq va vb
+evalNeq :: AlexPosn -> Value -> Value -> Eval Value
+evalNeq pos va vb = do
+  v <- evalEq pos va vb
   case v of
     VBool b -> return (VBool (not b))
-    _ -> throwError $ RuntimeError "internal error"
+    _ -> panic "type mismatch in neq"
 
-evalBoolBin :: (Bool -> Bool -> Bool) -> Value -> Value -> Eval Value
-evalBoolBin op va vb = case (va, vb) of
+evalBoolBin :: AlexPosn -> (Bool -> Bool -> Bool) -> Value -> Value -> Eval Value
+evalBoolBin _ op va vb = case (va, vb) of
   (VBool a, VBool b) -> return (VBool (op a b))
-  _ -> throwError $ RuntimeError "invalid operands"
+  _ -> panic "invalid operands reached evaluator"
 
 -- Statements
 
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
   s | isFunctionItemStmt s -> return VUnit
-  Stmt _ (DeclStmt (ValueDecl _ (Ident _ name) mType mExpr)) -> evalDeclExpr name mType mExpr
+  Stmt _ (DeclStmt (ValueDecl _ (Ident pos name) mType mExpr)) -> evalDeclExpr pos name mType mExpr
   Stmt _ (ExprStmt expr) -> evalExpr expr >> return VUnit
 
-evalDeclExpr :: String -> Maybe Type -> Maybe TypedExpr -> Eval Value
-evalDeclExpr name mType mExpr = do
+evalDeclExpr :: AlexPosn -> String -> Maybe Type -> Maybe TypedExpr -> Eval Value
+evalDeclExpr pos name mType mExpr = do
   val <- case mExpr of
     Just e -> evalExpr e
     Nothing -> case mType of
       Just t -> return (defaultValue t)
-      Nothing -> throwError $ RuntimeError "declaration lacks both type and initializer"
+      Nothing -> panicAt pos "declaration lacks both type and initializer reached evaluator"
   modify (bindInCurrentScope name val)
   return VUnit
 

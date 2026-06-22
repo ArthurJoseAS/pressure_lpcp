@@ -6,6 +6,7 @@ module TestUtil
     assertExpr,
     assertEvalError,
     Error (..),
+    RuntimeError (..),
     pos0,
     identFrom,
     emptyEnv,
@@ -21,7 +22,7 @@ import Ast hiding (Error)
 import Control.Monad.Except (runExcept)
 import Control.Monad.State (runStateT)
 import Data.Map.Strict qualified as Map
-import Eval (Env, Error (..), evalExpr, evalProgram)
+import Eval (Env, Error (..), RuntimeError (..), evalExpr, evalProgram)
 import Lexer (AlexPosn (..), runAlex)
 import Parser (parseProgram)
 

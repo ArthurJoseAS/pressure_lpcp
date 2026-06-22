@@ -22,7 +22,7 @@ testAst = do
   testTypeMismatchError
   testFloatNarrowingError
   testVarDeclAndLookup
-  testVarUndefined
+  testUndefinedVariableTypeError
   testVarDefaultValue
   testIntMul
   testFloatMul
@@ -49,3 +49,5 @@ testAst = do
   testDuplicateFunctionsRejected
   testDuplicateDeclarationsRejected
   testNestedFunctionCaptureRejected
+  testTypeErrorMessageFormat
+  testRuntimeErrorMessageFormat
