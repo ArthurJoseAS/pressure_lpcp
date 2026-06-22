@@ -8,7 +8,8 @@
 
 - [x] Add support for conditionals (grammar, interpreter)
 - [x] Add support for functions (grammar, interpreter)
-- [ ] Add support for recursion - Lima
+- [x] Add support for recursion - Lima
+- [ ] Add support for assignment operators.
 - [ ] Syntactic sugar for `else if`. - Victor
 - [ ] Add support for loops (grammar, interpreter) - Lima
 - [ ] Add support for arrays (grammar, interpreter) - Skeete
