@@ -72,6 +72,14 @@ testMixedSubEval :: IO ()
 testMixedSubEval =
   assertExpr
     "float subtraction eval"
-    (Expr UnitType (BinaryExpr SubOp (Expr UnitType (FloatLit 8.5)) (Expr UnitType (FloatLit 3.0))))
+    ( TypedExpr
+        pos0
+        (FloatT F64)
+        ( TypedBinaryExpr
+            SubOp
+            (TypedExpr pos0 (FloatT F64) (TypedFloatLit 8.5))
+            (TypedExpr pos0 (FloatT F64) (TypedFloatLit 3.0))
+        )
+    )
     emptyEnv
     (VFloat F64 5.5)

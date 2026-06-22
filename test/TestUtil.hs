@@ -42,14 +42,14 @@ assertOk :: Show e => String -> Either e a -> IO ()
 assertOk _ (Right _) = return ()
 assertOk name (Left err) = HUnit.assertFailure $ name ++ ": expected success but got " ++ show err
 
-assertExpr :: String -> Expr Type -> Env -> Value -> IO ()
+assertExpr :: String -> TypedExpr -> Env -> Value -> IO ()
 assertExpr name expr env expected = do
   case runExcept (runStateT (evalExpr expr) env) of
     Left err -> error $ name ++ " failed: " ++ show err
     Right (val, _) ->
       HUnit.assertEqual name expected val
 
-assertEvalError :: String -> Expr Type -> Env -> Error -> IO ()
+assertEvalError :: String -> TypedExpr -> Env -> Error -> IO ()
 assertEvalError name expr env expectedErr = do
   case runExcept (runStateT (evalExpr expr) env) of
     Left err ->

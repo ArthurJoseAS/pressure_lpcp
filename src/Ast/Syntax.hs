@@ -2,31 +2,41 @@ module Ast.Syntax
   ( Program (..),
     TopLevel (..),
     Block (..),
-    Stmt (..),
-    UnaryOp (..),
-    StmtKind (..),
-    ParsedExpr,
+    ParsedExpr (..),
+    ParsedExprKind (..),
+    ParsedStmt (..),
+    ParsedStmtKind (..),
+    ParsedDecl (..),
+    ParsedRepl,
     ParsedProgram,
     ParsedTopLevel,
     ParsedBlock,
-    ParsedStmt,
-    ParsedRepl,
-    ParsedDecl,
+    TypedExpr (..),
+    TypedExprKind (..),
+    TypedStmt (..),
+    TypedStmtKind (..),
+    TypedDecl (..),
+    TypedRepl,
+    TypedProgram,
+    TypedTopLevel,
+    TypedBlock,
     Param (..),
+    TypedParam (..),
     Repl (..),
-    Decl (..),
     Ident (..),
     Mutability (..),
     Sign (..),
     IntSize (..),
     FloatSize (..),
+    TypeSyntax (..),
+    TypeSyntaxKind (..),
     Type (..),
     BinaryOp (..),
-    Expr (..),
-    ExprKind (..),
+    UnaryOp (..),
     Value (..),
+    identPos,
+    identName,
     prettyType,
-    typePosn,
     prettyBinaryOp,
     prettyUnaryOp,
   )
@@ -35,67 +45,80 @@ where
 import Data.List (intercalate)
 import Lexer (AlexPosn (..))
 
-newtype Program a = Program [TopLevel a]
+newtype Program stmt = Program [TopLevel stmt]
   deriving (Show, Eq)
 
-type ParsedProgram = Program AlexPosn
-
-newtype TopLevel a = TopLevelStmt (Stmt a)
+newtype TopLevel stmt = TopLevelStmt stmt
   deriving (Show, Eq)
 
-type ParsedTopLevel = TopLevel AlexPosn
-
-data Block annot = Block [Stmt annot] (Maybe (Expr annot))
+data Block stmt expr = Block [stmt] (Maybe expr)
   deriving (Show, Eq)
 
-instance Functor Block where
-  fmap f (Block stmts expr) = Block (fmap (fmap f) stmts) (fmap (fmap f) expr)
+data Repl stmt expr
+  = ReplStmt stmt
+  | ReplExpr expr
+  deriving (Show, Eq)
 
-type ParsedBlock = Block AlexPosn
+type ParsedProgram = Program ParsedStmt
 
-data Stmt annot = Stmt
-  { stmtAnnot :: annot,
-    stmtKind :: StmtKind annot
+type ParsedTopLevel = TopLevel ParsedStmt
+
+type ParsedBlock = Block ParsedStmt ParsedExpr
+
+type ParsedRepl = Repl ParsedStmt ParsedExpr
+
+type TypedProgram = Program TypedStmt
+
+type TypedTopLevel = TopLevel TypedStmt
+
+type TypedBlock = Block TypedStmt TypedExpr
+
+type TypedRepl = Repl TypedStmt TypedExpr
+
+data ParsedStmt = ParsedStmt
+  { parsedStmtPos :: AlexPosn,
+    parsedStmtKind :: ParsedStmtKind
   }
   deriving (Show, Eq)
 
-instance Functor Stmt where
-  fmap f (Stmt annot kind) = Stmt (f annot) (fmap f kind)
-
-type ParsedStmt = Stmt AlexPosn
-
-data StmtKind annot
-  = DeclStmt (Decl annot)
-  | ExprStmt (Expr annot)
+data ParsedStmtKind
+  = ParsedDeclStmt ParsedDecl
+  | ParsedExprStmt ParsedExpr
   deriving (Show, Eq)
 
-instance Functor StmtKind where
-  fmap f = \case
-    DeclStmt d -> DeclStmt (fmap f d)
-    ExprStmt e -> ExprStmt (fmap f e)
-
-data Repl a
-  = ReplStmt (Stmt a)
-  | ReplExpr (Expr a)
+data TypedStmt = TypedStmt
+  { typedStmtPos :: AlexPosn,
+    typedStmtKind :: TypedStmtKind
+  }
   deriving (Show, Eq)
 
-type ParsedRepl = Repl AlexPosn
-
-data Decl a
-  = ValueDecl Mutability Ident (Maybe Type) (Maybe (Expr a))
+data TypedStmtKind
+  = TypedDeclStmt TypedDecl
+  | TypedExprStmt TypedExpr
   deriving (Show, Eq)
 
-instance Functor Decl where
-  fmap f (ValueDecl mutability ident typ expr) =
-    ValueDecl mutability ident typ (fmap (fmap f) expr)
+data ParsedDecl
+  = ParsedValueDecl Mutability Ident (Maybe TypeSyntax) (Maybe ParsedExpr)
+  deriving (Show, Eq)
 
-type ParsedDecl = Decl AlexPosn
+data TypedDecl
+  = TypedValueDecl Mutability Ident Type (Maybe TypedExpr)
+  deriving (Show, Eq)
 
-data Param = Param Ident Type
+data Param = Param Ident TypeSyntax
+  deriving (Show, Eq)
+
+data TypedParam = TypedParam Ident Type
   deriving (Show, Eq)
 
 data Ident = Ident AlexPosn String
   deriving (Show, Eq)
+
+identPos :: Ident -> AlexPosn
+identPos (Ident pos _) = pos
+
+identName :: Ident -> String
+identName (Ident _ name) = name
 
 data Mutability = Mutable | Constant
   deriving (Show, Eq)
@@ -109,14 +132,44 @@ data IntSize = I8 | I16 | I32 | I64
 data FloatSize = F32 | F64
   deriving (Show, Eq)
 
-data Type
-  = TypeName Ident
-  | BoolType AlexPosn
-  | IntType AlexPosn Sign IntSize
-  | FloatType AlexPosn FloatSize
-  | FnType AlexPosn [Type] Type
-  | UnitType
+data TypeSyntax = TypeSyntax
+  { typePos :: AlexPosn,
+    typeKind :: TypeSyntaxKind
+  }
   deriving (Show, Eq)
+
+data TypeSyntaxKind
+  = NameSyntax String
+  | BoolSyntax
+  | IntSyntax Sign IntSize
+  | FloatSyntax FloatSize
+  | FnSyntax [TypeSyntax] TypeSyntax
+  | UnitSyntax
+  deriving (Show, Eq)
+
+data Type
+  = BoolT
+  | IntT Sign IntSize
+  | FloatT FloatSize
+  | FnT [Type] Type
+  | UnitT
+  deriving (Show, Eq)
+
+prettyType :: Type -> String
+prettyType = \case
+  BoolT -> "bool"
+  IntT Signed I8 -> "i8"
+  IntT Signed I16 -> "i16"
+  IntT Signed I32 -> "i32"
+  IntT Signed I64 -> "i64"
+  IntT Unsigned I8 -> "u8"
+  IntT Unsigned I16 -> "u16"
+  IntT Unsigned I32 -> "u32"
+  IntT Unsigned I64 -> "u64"
+  FloatT F32 -> "f32"
+  FloatT F64 -> "f64"
+  FnT params ret -> "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
+  UnitT -> "()"
 
 data UnaryOp
   = NegOp
@@ -139,47 +192,49 @@ data BinaryOp
   | GeqOp
   deriving (Show, Eq)
 
-data Expr annot = Expr
-  { exprAnnot :: annot,
-    exprKind :: ExprKind annot
+data ParsedExpr = ParsedExpr
+  { parsedExprPos :: AlexPosn,
+    parsedExprKind :: ParsedExprKind
   }
   deriving (Show, Eq)
 
-instance Functor Expr where
-  fmap f (Expr annot kind) = Expr (f annot) (fmap f kind)
-
-type ParsedExpr = Expr AlexPosn
-
-data ExprKind annot
-  = IntLit Integer
-  | FloatLit Double
-  | BoolLit Bool
-  | BinaryExpr BinaryOp (Expr annot) (Expr annot)
-  | UnaryExpr UnaryOp (Expr annot)
-  | VarExpr Ident
-  | IfExpr (Expr annot) (Block annot) (Maybe (Block annot))
-  | FnExpr [Param] Type (Block annot)
-  | CallExpr (Expr annot) [Expr annot]
+data ParsedExprKind
+  = ParsedIntLit Integer
+  | ParsedFloatLit Double
+  | ParsedBoolLit Bool
+  | ParsedBinaryExpr BinaryOp ParsedExpr ParsedExpr
+  | ParsedUnaryExpr UnaryOp ParsedExpr
+  | ParsedVarExpr Ident
+  | ParsedIfExpr ParsedExpr ParsedBlock (Maybe ParsedBlock)
+  | ParsedFnExpr [Param] TypeSyntax ParsedBlock
+  | ParsedCallExpr ParsedExpr [ParsedExpr]
   deriving (Show, Eq)
 
-instance Functor ExprKind where
-  fmap f = \case
-    IntLit i -> IntLit i
-    FloatLit d -> FloatLit d
-    BoolLit b -> BoolLit b
-    BinaryExpr op l r -> BinaryExpr op (fmap f l) (fmap f r)
-    UnaryExpr op e -> UnaryExpr op (fmap f e)
-    VarExpr i -> VarExpr i
-    IfExpr c t e -> IfExpr (fmap f c) (fmap f t) (fmap (fmap f) e)
-    FnExpr params ret body -> FnExpr params ret (fmap f body)
-    CallExpr callee args -> CallExpr (fmap f callee) (fmap (fmap f) args)
+data TypedExpr = TypedExpr
+  { typedExprPos :: AlexPosn,
+    typedExprType :: Type,
+    typedExprKind :: TypedExprKind
+  }
+  deriving (Show, Eq)
+
+data TypedExprKind
+  = TypedIntLit Integer
+  | TypedFloatLit Double
+  | TypedBoolLit Bool
+  | TypedBinaryExpr BinaryOp TypedExpr TypedExpr
+  | TypedUnaryExpr UnaryOp TypedExpr
+  | TypedVarExpr Ident
+  | TypedIfExpr TypedExpr TypedBlock (Maybe TypedBlock)
+  | TypedFnExpr [TypedParam] Type TypedBlock
+  | TypedCallExpr TypedExpr [TypedExpr]
+  deriving (Show, Eq)
 
 data Value
   = VInt Sign IntSize Integer
   | VFloat FloatSize Double
   | VBool Bool
   | VUnit
-  | VFunction [Param] Type (Block Type)
+  | VFunction [TypedParam] Type TypedBlock
   | VEmpty
   deriving (Eq)
 
@@ -192,33 +247,6 @@ instance Show Value where
     VUnit -> "()"
     VFunction {} -> "<function>"
     VEmpty -> undefined
-
-prettyType :: Type -> String
-prettyType = \case
-  TypeName (Ident _ name) -> name
-  BoolType _ -> "bool"
-  IntType _ Signed I8 -> "i8"
-  IntType _ Signed I16 -> "i16"
-  IntType _ Signed I32 -> "i32"
-  IntType _ Signed I64 -> "i64"
-  IntType _ Unsigned I8 -> "u8"
-  IntType _ Unsigned I16 -> "u16"
-  IntType _ Unsigned I32 -> "u32"
-  IntType _ Unsigned I64 -> "u64"
-  FloatType _ F32 -> "f32"
-  FloatType _ F64 -> "f64"
-  FnType _ params ret ->
-    "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
-  UnitType -> "()"
-
-typePosn :: Type -> AlexPosn
-typePosn = \case
-  TypeName (Ident pos _) -> pos
-  BoolType pos -> pos
-  IntType pos _ _ -> pos
-  FloatType pos _ -> pos
-  FnType pos _ _ -> pos
-  UnitType -> AlexPn 0 1 1
 
 prettyBinaryOp :: BinaryOp -> String
 prettyBinaryOp = \case

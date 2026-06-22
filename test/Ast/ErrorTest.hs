@@ -5,11 +5,11 @@ where
 
 import Ast hiding (Error, UndefinedVariable)
 import Ast.Typecheck qualified as T
-import Eval qualified as Eval
+import Eval qualified
 import Lexer (AlexPosn (..))
-import TestUtil
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
+import TestUtil
 
 errorTests :: TestTree
 errorTests =
@@ -24,6 +24,7 @@ errorTests =
       testCase "rejects duplicate parameters" testDuplicateParamsRejected,
       testCase "rejects duplicate functions" testDuplicateFunctionsRejected,
       testCase "rejects duplicate declarations" testDuplicateDeclarationsRejected,
+      testCase "rejects undefined types" testUndefinedTypeError,
       testCase "formats type errors" testTypeErrorMessageFormat,
       testCase "formats runtime errors" testRuntimeErrorMessageFormat
     ]
@@ -45,7 +46,7 @@ testUndefinedVariableTypeError = checkErr "undefined variable" "x: int = y;"
 
 testMissingAnnotationError :: IO ()
 testMissingAnnotationError =
-  case checkProgram (Program [TopLevelStmt (Stmt pos0 (DeclStmt (ValueDecl Mutable (identFrom "x") Nothing Nothing)))]) of
+  case checkProgram (Program [TopLevelStmt (ParsedStmt pos0 (ParsedDeclStmt (ParsedValueDecl Mutable (identFrom "x") Nothing Nothing)))]) of
     Left _ -> return ()
     Right () -> error "missing annotation: expected type error but passed"
 
@@ -61,20 +62,31 @@ testDuplicateDeclarationsRejected :: IO ()
 testDuplicateDeclarationsRejected = do
   checkErr "duplicate declarations" "x :: 1; x :: 2;"
 
+testUndefinedTypeError :: IO ()
+testUndefinedTypeError = do
+  checkErr "undefined type in function return" "foo :: fn() -> bar {};"
+  checkErr "undefined type in annotation" "x: baz = 1;"
+  checkErr "undefined type in function param" "f :: fn(x: qux) -> i32 { 1 };"
+  checkErr "undefined type in function item return" "f :: fn() -> baz {};"
+
 testTypeErrorMessageFormat :: IO ()
 testTypeErrorMessageFormat = do
   let pos = AlexPn 0 1 10
-  let (p, m) = T.errorInfo (T.TypeMismatch pos (IntType (AlexPn 0 1 1) Signed I32) (BoolType (AlexPn 0 1 1)))
+  let (p, m) = T.errorInfo (T.TypeMismatch pos (IntT Signed I32) BoolT)
   assertEqual "type mismatch pos" pos p
   assertEqual "type mismatch text" "type mismatch: expected 'i32', found 'bool'" m
 
-  let (p2, m2) = T.errorInfo (T.UnsupportedOp pos AddOp (IntType (AlexPn 0 1 1) Signed I32) (BoolType (AlexPn 0 1 5)))
+  let (p2, m2) = T.errorInfo (T.UnsupportedOp pos AddOp (IntT Signed I32) BoolT)
   assertEqual "unsupported op pos" pos p2
   assertEqual "unsupported op text" "cannot use operator '+' on type 'i32' and 'bool'" m2
 
   let (p3, m3) = T.errorInfo (T.UndefinedVariable pos "foo")
   assertEqual "type undefined pos" pos p3
   assertEqual "type undefined text" "undefined variable 'foo'" m3
+
+  let (p4, m4) = T.errorInfo (T.UndefinedType pos "bar")
+  assertEqual "type undefined type pos" pos p4
+  assertEqual "type undefined type text" "undefined type 'bar'" m4
 
 testRuntimeErrorMessageFormat :: IO ()
 testRuntimeErrorMessageFormat = do

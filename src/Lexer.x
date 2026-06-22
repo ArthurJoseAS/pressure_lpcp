@@ -39,6 +39,7 @@ tokens :-
   uint                               { mkToken KwUint }
   float                              { mkToken KwFloat }
   bool                               { mkToken KwBool }
+  unit                               { mkToken KwUnit }
   byte                               { mkToken KwByte }
   i8                                 { mkToken KwI8 }
   i16                                { mkToken KwI16 }
@@ -108,6 +109,7 @@ data Token
   | KwUint AlexPosn
   | KwFloat AlexPosn
   | KwBool AlexPosn
+  | KwUnit AlexPosn
   | KwByte AlexPosn
   | KwI8 AlexPosn
   | KwI16 AlexPosn
@@ -175,6 +177,7 @@ token_posn (KwInt p)   = p
 token_posn (KwUint p)   = p
 token_posn (KwFloat p)   = p
 token_posn (KwBool p)   = p
+token_posn (KwUnit p)   = p
 token_posn (KwByte p)   = p
 token_posn (KwI8 p)     = p
 token_posn (KwI16 p)    = p
@@ -276,6 +279,7 @@ prettyToken = \case
   KwUint _ -> "keyword 'uint'"
   KwFloat _ -> "keyword 'float'"
   KwBool _ -> "keyword 'bool'"
+  KwUnit _ -> "keyword 'unit'"
   KwByte _ -> "keyword 'byte'"
   KwI8 _ -> "keyword 'i8'"
   KwI16 _ -> "keyword 'i16'"

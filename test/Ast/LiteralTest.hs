@@ -64,7 +64,7 @@ testVarDeclAndLookup = do
     result <- evalParsed "var decl and lookup" ast
     case result of
       Right (_, env) ->
-        assertExpr "x after decl" (Expr UnitType (VarExpr (identFrom "x"))) env (VInt Signed I32 42)
+        assertExpr "x after decl" (TypedExpr pos0 UnitT (TypedVarExpr (identFrom "x"))) env (VInt Signed I32 42)
       Left err -> error $ "eval failed: " ++ show err
 
 testVarDefaultValue :: IO ()

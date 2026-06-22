@@ -27,6 +27,7 @@ import Ast.Syntax
   uint          { KwUint _ }
   float         { KwFloat _ }
   bool          { KwBool _ }
+  unit          { KwUnit _ }
   i8            { KwI8 _ }
   i16           { KwI16 _ }
   i32           { KwI32 _ }
@@ -80,20 +81,20 @@ TopLevels : TopLevel TopLevels { $1 : $2 }
           |                    { [] }
 
 TopLevel : Stmt   { TopLevelStmt $1 }
-         | IfExpr { TopLevelStmt (Stmt (exprPos $1) (ExprStmt $1)) }
+         | IfExpr { TopLevelStmt (ParsedStmt (exprPos $1) (ParsedExprStmt $1)) }
 
 ReplInput : Stmt      { ReplStmt $1 }
-          | ValueDecl { ReplStmt (Stmt (declPos $1) (DeclStmt $1)) }
+          | ValueDecl { ReplStmt (ParsedStmt (declPos $1) (ParsedDeclStmt $1)) }
           | Expr      { ReplExpr $1 }
 
 {- statements -}
 
-Stmt : ValueDecl ';' { Stmt (declPos $1) (DeclStmt $1) }
-     | Expr ';'      { Stmt (exprPos $1) (ExprStmt $1) }
+Stmt : ValueDecl ';' { ParsedStmt (declPos $1) (ParsedDeclStmt $1) }
+     | Expr ';'      { ParsedStmt (exprPos $1) (ParsedExprStmt $1) }
 
-ValueDecl : ID ':' Type               { ValueDecl Mutable (toIdent $1) (Just $3) Nothing }
-          | ID ':' OptType '=' Expr   { ValueDecl Mutable (toIdent $1) $3 (Just $5) }
-          | ID ':' OptType ':' Expr   { ValueDecl Constant (toIdent $1) $3 (Just $5) }
+ValueDecl : ID ':' Type               { ParsedValueDecl Mutable (toIdent $1) (Just $3) Nothing }
+          | ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 (Just $5) }
+          | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 (Just $5) }
 
 {- expressions -}
 
@@ -108,11 +109,11 @@ Expr : IfExpr        { $1 }
      | FnExpr        { $1 }
      | LogicalOrExpr { $1 }
 
-IfExpr : if Expr Block            { Expr (token_posn $1) (IfExpr $2 $3 Nothing) }
-       | if Expr Block else Block { Expr (token_posn $1) (IfExpr $2 $3 (Just $5)) }
+IfExpr : if Expr Block            { ParsedExpr (token_posn $1) (ParsedIfExpr $2 $3 Nothing) }
+       | if Expr Block else Block { ParsedExpr (token_posn $1) (ParsedIfExpr $2 $3 (Just $5)) }
 
-FnExpr : fn '(' FnParams ')' '->' Type Block { Expr (token_posn $1) (FnExpr $3 $6 $7) }
-       | fn '(' FnParams ')' Block { Expr (token_posn $1) (FnExpr $3 UnitType $5) }
+FnExpr : fn '(' FnParams ')' '->' Type Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 $6 $7) }
+       | fn '(' FnParams ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 (TypeSyntax (token_posn $1) UnitSyntax) $5) }
 
 FnParams : FnParamList { $1 }
          |             { [] }
@@ -122,13 +123,13 @@ FnParamList : FnParam                 { [$1] }
 
 FnParam : ID ':' Type { Param (toIdent $1) $3 }
 
-LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { Expr (token_posn $2) (BinaryExpr OrOp $1 $3) }
+LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr OrOp $1 $3) }
               | LogicalAndExpr                  { $1 }
 
-LogicalAndExpr : LogicalAndExpr and ComparisonExpr { Expr (token_posn $2) (BinaryExpr AndOp $1 $3) }
+LogicalAndExpr : LogicalAndExpr and ComparisonExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr AndOp $1 $3) }
                | ComparisonExpr                    { $1 }
 
-ComparisonExpr : AddExpr CompareOp AddExpr { let (pos, op) = $2 in Expr pos (BinaryExpr op $1 $3) }
+ComparisonExpr : AddExpr CompareOp AddExpr { let (pos, op) = $2 in ParsedExpr pos (ParsedBinaryExpr op $1 $3) }
                | AddExpr                   { $1 }
 
 CompareOp : '==' { (token_posn $1, EqOp) }
@@ -138,21 +139,21 @@ CompareOp : '==' { (token_posn $1, EqOp) }
           | '>'  { (token_posn $1, GtOp) }
           | '>=' { (token_posn $1, GeqOp) }
 
-AddExpr : AddExpr '+' MulExpr { Expr (token_posn $2) (BinaryExpr AddOp $1 $3) }
-        | AddExpr '-' MulExpr { Expr (token_posn $2) (BinaryExpr SubOp $1 $3) }
+AddExpr : AddExpr '+' MulExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr AddOp $1 $3) }
+        | AddExpr '-' MulExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp $1 $3) }
         | MulExpr             { $1 }
 
-MulExpr : MulExpr '*' UnaryExpr { Expr (token_posn $2) (BinaryExpr MulOp $1 $3) }
-        | MulExpr '/' UnaryExpr { Expr (token_posn $2) (BinaryExpr DivOp $1 $3) }
+MulExpr : MulExpr '*' UnaryExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp $1 $3) }
+        | MulExpr '/' UnaryExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp $1 $3) }
         | UnaryExpr             { $1 }
 
-UnaryExpr : '-' UnaryExpr { Expr (token_posn $1) (UnaryExpr NegOp $2) }
-          | '&' UnaryExpr { Expr (token_posn $1) (UnaryExpr AmpersandOp $2) }
-          | '!' UnaryExpr { Expr (token_posn $1) (UnaryExpr NotOp $2) }
+UnaryExpr : '-' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NegOp $2) }
+          | '&' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr AmpersandOp $2) }
+          | '!' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NotOp $2) }
           | CallExpr      { $1 }
 
 CallExpr : AtomExpr              { $1 }
-         | CallExpr '(' Args ')' { Expr (exprPos $1) (CallExpr $1 $3) }
+         | CallExpr '(' Args ')' { ParsedExpr (exprPos $1) (ParsedCallExpr $1 $3) }
 
 Args : ArgList { $1 }
      |         { [] }
@@ -162,21 +163,21 @@ ArgList : Expr             { [$1] }
 
 AtomExpr : INT_LITERAL   { toIntLit $1 }
          | FLOAT_LITERAL { toFloatLit $1 }
-         | true          { Expr (token_posn $1) (BoolLit True) }
-         | false         { Expr (token_posn $1) (BoolLit False) }
+         | true          { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
+         | false         { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
          | '(' Expr ')'  { $2 }
-         | ID            { Expr (token_posn $1) (VarExpr (toIdent $1)) }
+         | ID            { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
 
 {- types -}
 
 OptType : Type { Just $1 }
         |      { Nothing }
 
-Type : ID       { TypeName (toIdent $1) }
+Type : ID       { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
      | FnType   { $1 }
      | TypeLit  { $1 }
 
-FnType : fn '(' FnParamsTypes ')' '->' Type { FnType (token_posn $1) $3 $6 }
+FnType : fn '(' FnParamsTypes ')' '->' Type { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
 
 FnParamsTypes : FnParamsTypesList { $1 }
               |                   { [] }
@@ -184,20 +185,21 @@ FnParamsTypes : FnParamsTypesList { $1 }
 FnParamsTypesList : Type                       { [$1] }
                   | Type ',' FnParamsTypesList { $1 : $3 }
 
-TypeLit : bool  { BoolType (token_posn $1) }
-        | int   { IntType (token_posn $1) Signed I32 }
-        | uint  { IntType (token_posn $1) Unsigned I32 }
-        | float { FloatType (token_posn $1) F64 }
-        | i8    { IntType (token_posn $1) Signed I8 }
-        | i16   { IntType (token_posn $1) Signed I16 }
-        | i32   { IntType (token_posn $1) Signed I32 }
-        | i64   { IntType (token_posn $1) Signed I64 }
-        | u8    { IntType (token_posn $1) Unsigned I8 }
-        | u16   { IntType (token_posn $1) Unsigned I16 }
-        | u32   { IntType (token_posn $1) Unsigned I32 }
-        | u64   { IntType (token_posn $1) Unsigned I64 }
-        | f32   { FloatType (token_posn $1) F32 }
-        | f64   { FloatType (token_posn $1) F64 }
+TypeLit : unit  { TypeSyntax (token_posn $1) UnitSyntax }
+        | bool  { TypeSyntax (token_posn $1) BoolSyntax }
+        | int   { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
+        | uint  { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
+        | float { TypeSyntax (token_posn $1) (FloatSyntax F64) }
+        | i8    { TypeSyntax (token_posn $1) (IntSyntax Signed I8) }
+        | i16   { TypeSyntax (token_posn $1) (IntSyntax Signed I16) }
+        | i32   { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
+        | i64   { TypeSyntax (token_posn $1) (IntSyntax Signed I64) }
+        | u8    { TypeSyntax (token_posn $1) (IntSyntax Unsigned I8) }
+        | u16   { TypeSyntax (token_posn $1) (IntSyntax Unsigned I16) }
+        | u32   { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
+        | u64   { TypeSyntax (token_posn $1) (IntSyntax Unsigned I64) }
+        | f32   { TypeSyntax (token_posn $1) (FloatSyntax F32) }
+        | f64   { TypeSyntax (token_posn $1) (FloatSyntax F64) }
 
 {
 parseError :: Token -> Alex a
@@ -213,23 +215,27 @@ parseErrorInfo s = case break (== ':') s of
     _ -> (Nothing, s)
   _ -> (Nothing, s)
 
+idToString :: Token -> String
+idToString (Id pos name) = name
+idToString _ = error "internal parser error: expected identifier"
+
 toIdent :: Token -> Ident
 toIdent (Id pos name) = Ident pos name
 toIdent _ = error "internal parser error: expected identifier"
 
 toIntLit :: Token -> ParsedExpr
-toIntLit (IntLiteral pos value) = Expr pos (IntLit value)
+toIntLit (IntLiteral pos value) = ParsedExpr pos (ParsedIntLit value)
 toIntLit _ = error "internal parser error: expected integer literal"
 
 toFloatLit :: Token -> ParsedExpr
-toFloatLit (FloatLiteral pos value) = Expr pos (FloatLit value)
+toFloatLit (FloatLiteral pos value) = ParsedExpr pos (ParsedFloatLit value)
 toFloatLit _ = error "internal parser error: expected float literal"
 
 declPos :: ParsedDecl -> AlexPosn
-declPos (ValueDecl _ (Ident pos _) _ _) = pos
+declPos (ParsedValueDecl _ (Ident pos _) _ _) = pos
 
 exprPos :: ParsedExpr -> AlexPosn
-exprPos (Expr pos _) = pos
+exprPos (ParsedExpr pos _) = pos
 
 prependStmt :: ParsedStmt -> ParsedBlock -> ParsedBlock
 prependStmt stmt (Block stmts expr) = Block (stmt : stmts) expr

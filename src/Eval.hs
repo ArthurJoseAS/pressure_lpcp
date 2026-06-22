@@ -15,28 +15,27 @@ where
 import Ast.Syntax
   ( BinaryOp (..),
     Block (..),
-    Decl (..),
-    Expr (..),
-    ExprKind (..),
     FloatSize (..),
     Ident (..),
     IntSize (..),
     Mutability (..),
-    Param (..),
     Program (..),
     Repl (..),
     Sign (..),
-    Stmt (..),
-    StmtKind (..),
+    TypedDecl (..),
+    TypedExpr (..),
+    TypedExprKind (..),
+    TypedParam (..),
+    TypedStmt (..),
+    TypedStmtKind (..),
     TopLevel (..),
     Type (..),
     UnaryOp (..),
     Value (..),
-    typePosn,
   )
-import Ast.Typecheck (TypedBlock, TypedExpr, TypedProgram, TypedStmt)
+import Ast.Typecheck (TypedBlock, TypedProgram, TypedRepl)
 import Control.Monad.Except (Except, MonadError (throwError))
-import Control.Monad.State (StateT, get, lift, modify, put)
+import Control.Monad.State (StateT, get, modify, put)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -121,12 +120,11 @@ asNumber = \case
 
 defaultValue :: Type -> Value
 defaultValue = \case
-  IntType _ s k -> VInt s k 0
-  FloatType _ k -> VFloat k 0
-  BoolType _ -> VBool False
-  FnType _ _ _ -> VEmpty
-  UnitType -> VUnit
-  TypeName _ -> VEmpty
+  IntT s k -> VInt s k 0
+  FloatT k -> VFloat k 0
+  BoolT -> VBool False
+  FnT _ _ -> VEmpty
+  UnitT -> VUnit
 
 withNumbers :: AlexPosn -> (RuntimeNumber -> RuntimeNumber -> Eval Value) -> Value -> Value -> Eval Value
 withNumbers pos f va vb =
@@ -137,16 +135,16 @@ withNumbers pos f va vb =
 -- Expressions
 
 evalExpr :: TypedExpr -> Eval Value
-evalExpr (Expr typ kind) = case kind of
-  IntLit i -> return (VInt Signed I32 i)
-  FloatLit f -> return (VFloat F64 f)
-  BoolLit b -> return (VBool b)
-  UnaryExpr op e -> evalUnaryExpr (typePosn typ) op e
-  BinaryExpr op l r -> evalBinaryExpr (typePosn typ) op l r
-  VarExpr (Ident pos i) -> evalVarExpr pos i
-  IfExpr c t elseBlock -> evalIfExpr (typePosn typ) c t elseBlock
-  FnExpr params ret body -> evalFnExpr params ret body
-  CallExpr callee args -> evalCallExpr (typePosn typ) callee args
+evalExpr (TypedExpr pos _ kind) = case kind of
+  TypedIntLit i -> return (VInt Signed I32 i)
+  TypedFloatLit f -> return (VFloat F64 f)
+  TypedBoolLit b -> return (VBool b)
+  TypedUnaryExpr op e -> evalUnaryExpr pos op e
+  TypedBinaryExpr op l r -> evalBinaryExpr pos op l r
+  TypedVarExpr (Ident identPos name) -> evalVarExpr identPos name
+  TypedIfExpr c t elseBlock -> evalIfExpr pos c t elseBlock
+  TypedFnExpr params ret body -> evalFnExpr params ret body
+  TypedCallExpr callee args -> evalCallExpr pos callee args
 
 evalIfExpr :: AlexPosn -> TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
 evalIfExpr pos c t mElse = do
@@ -163,7 +161,7 @@ evalVarExpr pos name = do
     Just v -> return v
     Nothing -> panicAt pos ("undefined variable '" ++ name ++ "' reached evaluator")
 
-evalFnExpr :: [Param] -> Type -> TypedBlock -> Eval Value
+evalFnExpr :: [TypedParam] -> Type -> TypedBlock -> Eval Value
 evalFnExpr params ret body =
   return $ VFunction params ret body
 
@@ -185,10 +183,10 @@ callValue pos (VFunction params _ body) argVals = do
       return val
 callValue pos _ _ = panicAt pos "attempted to call non-function reached evaluator"
 
-bindArgs :: [Param] -> [Value] -> Env -> Env
+bindArgs :: [TypedParam] -> [Value] -> Env -> Env
 bindArgs params argVals env = foldl bind env (zip params argVals)
   where
-    bind e (Param (Ident _ name) _, val) = bindInCurrentScope name val e
+    bind e (TypedParam (Ident _ name) _, val) = bindInCurrentScope name val e
 
 evalUnaryExpr :: AlexPosn -> UnaryOp -> TypedExpr -> Eval Value
 evalUnaryExpr pos op e = do
@@ -273,23 +271,21 @@ evalBoolBin _ op va vb = case (va, vb) of
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
   s | isFunctionItemStmt s -> return VUnit
-  Stmt _ (DeclStmt (ValueDecl _ (Ident pos name) mType mExpr)) -> evalDeclExpr pos name mType mExpr
-  Stmt _ (ExprStmt expr) -> evalExpr expr >> return VUnit
+  TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident pos name) typ mExpr)) -> evalDeclExpr pos name typ mExpr
+  TypedStmt _ (TypedExprStmt expr) -> evalExpr expr >> return VUnit
 
-evalDeclExpr :: AlexPosn -> String -> Maybe Type -> Maybe TypedExpr -> Eval Value
-evalDeclExpr pos name mType mExpr = do
+evalDeclExpr :: AlexPosn -> String -> Type -> Maybe TypedExpr -> Eval Value
+evalDeclExpr _ name typ mExpr = do
   val <- case mExpr of
     Just e -> evalExpr e
-    Nothing -> case mType of
-      Just t -> return (defaultValue t)
-      Nothing -> panicAt pos "declaration lacks both type and initializer reached evaluator"
+    Nothing -> return (defaultValue typ)
   modify (bindInCurrentScope name val)
   return VUnit
 
 -- Function items
 
 isFunctionItemStmt :: TypedStmt -> Bool
-isFunctionItemStmt (Stmt _ (DeclStmt (ValueDecl Constant _ _ (Just (Expr _ (FnExpr {})))))) = True
+isFunctionItemStmt (TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant _ _ (Just (TypedExpr _ _ (TypedFnExpr {})))))) = True
 isFunctionItemStmt _ = False
 
 installFunctionItems :: [TypedStmt] -> Eval ()
@@ -303,9 +299,9 @@ installFunctionItems stmts = do
              in bindInCurrentScope name closure env'
   put extendedEnv
 
-functionItem :: TypedStmt -> Maybe (String, [Param], Type, TypedBlock)
+functionItem :: TypedStmt -> Maybe (String, [TypedParam], Type, TypedBlock)
 functionItem = \case
-  (Stmt _ (DeclStmt (ValueDecl Constant (Ident _ name) _ (Just (Expr _ (FnExpr params ret body)))))) -> Just (name, params, ret, body)
+  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ name) _ (Just (TypedExpr _ _ (TypedFnExpr params ret body))))) -> Just (name, params, ret, body)
   _ -> Nothing
 
 -- Blocks
@@ -330,7 +326,7 @@ evalProgram (Program toplevels) = do
 
 -- REPL
 
-evalReplInput :: Repl Type -> Eval Value
+evalReplInput :: TypedRepl -> Eval Value
 evalReplInput = \case
   ReplExpr e -> evalExpr e
   ReplStmt s | isFunctionItemStmt s -> installFunctionItems [s] >> return VUnit
