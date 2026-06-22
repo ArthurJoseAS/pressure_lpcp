@@ -25,33 +25,29 @@ import Data.Map.Strict qualified as Map
 import Eval (Env, Error (..), RuntimeError (..), evalExpr, evalProgram)
 import Lexer (AlexPosn (..), runAlex)
 import Parser (parseProgram)
+import Test.Tasty.HUnit qualified as HUnit
 
 assertEqual :: (Show a, Eq a) => String -> a -> a -> IO ()
-assertEqual name expected actual =
-  if expected == actual
-    then return ()
-    else error $ name ++ " failed:\n  expected: " ++ show expected ++ "\n  actual:   " ++ show actual
+assertEqual name expected actual = HUnit.assertEqual name expected actual
 
 assertRight :: Show e => String -> Either e a -> IO a
-assertRight name (Left err) = error $ name ++ " failed with: " ++ show err
+assertRight name (Left err) = HUnit.assertFailure $ name ++ " failed with: " ++ show err
 assertRight _ (Right x) = return x
 
 assertLeft :: String -> Either e a -> IO ()
 assertLeft _ (Left _) = return ()
-assertLeft name (Right _) = error $ name ++ ": expected error"
+assertLeft name (Right _) = HUnit.assertFailure $ name ++ ": expected error"
 
 assertOk :: Show e => String -> Either e a -> IO ()
 assertOk _ (Right _) = return ()
-assertOk name (Left err) = error $ name ++ ": expected success but got " ++ show err
+assertOk name (Left err) = HUnit.assertFailure $ name ++ ": expected success but got " ++ show err
 
 assertExpr :: String -> Expr Type -> Env -> Value -> IO ()
 assertExpr name expr env expected = do
   case runExcept (runStateT (evalExpr expr) env) of
     Left err -> error $ name ++ " failed: " ++ show err
     Right (val, _) ->
-      if val == expected
-        then return ()
-        else error $ name ++ ": expected " ++ show expected ++ " but got " ++ show val
+      HUnit.assertEqual name expected val
 
 assertEvalError :: String -> Expr Type -> Env -> Error -> IO ()
 assertEvalError name expr env expectedErr = do
@@ -59,8 +55,8 @@ assertEvalError name expr env expectedErr = do
     Left err ->
       if err == expectedErr
         then return ()
-        else error $ name ++ ": expected error '" ++ show expectedErr ++ "' but got '" ++ show err ++ "'"
-    Right (val, _) -> error $ name ++ ": expected error but got " ++ show val
+        else HUnit.assertFailure $ name ++ ": expected error '" ++ show expectedErr ++ "' but got '" ++ show err ++ "'"
+    Right (val, _) -> HUnit.assertFailure $ name ++ ": expected error but got " ++ show val
 
 pos0 :: AlexPosn
 pos0 = AlexPn 0 1 1

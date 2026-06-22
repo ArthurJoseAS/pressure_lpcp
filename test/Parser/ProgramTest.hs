@@ -1,9 +1,14 @@
-module Parser.ProgramTest (testParseProgram) where
+module Parser.ProgramTest (parserProgramTests) where
 
 import Ast
 import Lexer (runAlex)
 import Parser (parseProgram)
 import TestUtil (assertRight)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+parserProgramTests :: TestTree
+parserProgramTests = testGroup "program" [testCase "parses programs" testParseProgram]
 
 testParseProgram :: IO ()
 testParseProgram = do

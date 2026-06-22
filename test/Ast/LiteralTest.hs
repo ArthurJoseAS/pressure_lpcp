@@ -1,15 +1,24 @@
 module Ast.LiteralTest
-  ( testIntLit,
-    testFloatLit,
-    testBoolLit,
-    testVarDeclAndLookup,
-    testVarDefaultValue,
-    testBoolDefaultValue,
+  ( literalTests,
   )
 where
 
 import Ast hiding (Error)
 import TestUtil
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+literalTests :: TestTree
+literalTests =
+  testGroup
+    "literals"
+    [ testCase "evaluates int literals" testIntLit,
+      testCase "evaluates float literals" testFloatLit,
+      testCase "evaluates bool literals" testBoolLit,
+      testCase "declares and looks up variables" testVarDeclAndLookup,
+      testCase "defaults int variables" testVarDefaultValue,
+      testCase "defaults bool variables" testBoolDefaultValue
+    ]
 
 testIntLit :: IO ()
 testIntLit = do

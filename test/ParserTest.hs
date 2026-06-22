@@ -1,12 +1,15 @@
-module ParserTest (testParser) where
+module ParserTest (parserTests) where
 
-import Parser.ErrorTest (testParseErrorFormat, testParseErrors)
-import Parser.ProgramTest (testParseProgram)
-import Parser.ReplTest (testParseRepl)
+import Parser.ErrorTest (parserErrorTests)
+import Parser.ProgramTest (parserProgramTests)
+import Parser.ReplTest (parserReplTests)
+import Test.Tasty (TestTree, testGroup)
 
-testParser :: IO ()
-testParser = do
-  testParseProgram
-  testParseRepl
-  testParseErrors
-  testParseErrorFormat
+parserTests :: TestTree
+parserTests =
+  testGroup
+    "parser"
+    [ parserProgramTests,
+      parserReplTests,
+      parserErrorTests
+    ]

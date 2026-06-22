@@ -1,15 +1,5 @@
 module Ast.FunctionTest
-  ( testUnitFunctionSugar,
-    testFunctionEval,
-    testClosureCapturesByValue,
-    testFunctionLocalScope,
-    testDirectRecursion,
-    testTopLevelMutualRecursion,
-    testLocalMutualRecursionRejected,
-    testForwardFunctionReference,
-    testFunctionUsesGlobal,
-    testReplRecursiveFunction,
-    testNestedFunctionCaptureRejected,
+  ( functionTests,
   )
 where
 
@@ -20,7 +10,25 @@ import Eval (evalReplInput)
 import Lexer (runAlex)
 import Parser (parseRepl)
 import TestUtil
-import TestUtil (evalParsed, withTokens)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+functionTests :: TestTree
+functionTests =
+  testGroup
+    "functions"
+    [ testCase "evaluates unit function sugar" testUnitFunctionSugar,
+      testCase "evaluates functions" testFunctionEval,
+      testCase "rejects same-block closure capture" testClosureCapturesByValue,
+      testCase "keeps function scope local" testFunctionLocalScope,
+      testCase "evaluates direct recursion" testDirectRecursion,
+      testCase "evaluates top-level mutual recursion" testTopLevelMutualRecursion,
+      testCase "rejects local mutual recursion" testLocalMutualRecursionRejected,
+      testCase "evaluates forward function references" testForwardFunctionReference,
+      testCase "evaluates function global access" testFunctionUsesGlobal,
+      testCase "evaluates repl recursive functions" testReplRecursiveFunction,
+      testCase "rejects nested function capture" testNestedFunctionCaptureRejected
+    ]
 
 testUnitFunctionSugar :: IO ()
 testUnitFunctionSugar = do

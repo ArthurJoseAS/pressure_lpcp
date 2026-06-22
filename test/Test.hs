@@ -1,18 +1,18 @@
 module Main (main) where
 
-import AstTest (testAst)
-import LexerTest (testLexer)
-import ParserTest (testParser)
-import TypeTest (testType)
+import AstTest (astTests)
+import LexerTest (lexerTests)
+import ParserTest (parserTests)
+import Test.Tasty (defaultMain, testGroup)
+import TypeTest (typeTests)
 
 main :: IO ()
-main = do
-  putStrLn "Running lexer tests..."
-  testLexer
-  putStrLn "Running parser tests..."
-  testParser
-  putStrLn "Running type tests..."
-  testType
-  putStrLn "Running AST tests..."
-  testAst
-  putStrLn "All tests passed."
+main =
+  defaultMain $
+    testGroup
+      "pressure-lang"
+      [ lexerTests,
+        parserTests,
+        typeTests,
+        astTests
+      ]

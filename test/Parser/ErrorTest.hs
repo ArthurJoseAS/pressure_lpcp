@@ -1,8 +1,18 @@
-module Parser.ErrorTest (testParseErrors, testParseErrorFormat) where
+module Parser.ErrorTest (parserErrorTests) where
 
 import Lexer (AlexPosn (..), runAlex)
 import Parser (parseErrorInfo, parseProgram)
 import TestUtil (assertEqual, assertLeft, assertRight)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+parserErrorTests :: TestTree
+parserErrorTests =
+  testGroup
+    "errors"
+    [ testCase "rejects parse errors" testParseErrors,
+      testCase "formats parse errors" testParseErrorFormat
+    ]
 
 testParseErrors :: IO ()
 testParseErrors = do

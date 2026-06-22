@@ -1,20 +1,29 @@
 module Ast.ArithTest
-  ( testIntAdd,
-    testFloatAdd,
-    testIntDiv,
-    testFloatDiv,
-    testDivByZero,
-    testTypeNameAnnotation,
-    testIntMul,
-    testFloatMul,
-    testIntSub,
-    testFloatSub,
-    testMixedSubEval,
+  ( arithTests,
   )
 where
 
 import Ast hiding (Error)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
 import TestUtil
+
+arithTests :: TestTree
+arithTests =
+  testGroup
+    "arithmetic"
+    [ testCase "checks int addition" testIntAdd,
+      testCase "checks float addition" testFloatAdd,
+      testCase "checks int division" testIntDiv,
+      testCase "checks float division" testFloatDiv,
+      testCase "reports division by zero" testDivByZero,
+      testCase "checks type-name annotations" testTypeNameAnnotation,
+      testCase "checks int multiplication" testIntMul,
+      testCase "checks float multiplication" testFloatMul,
+      testCase "checks int subtraction" testIntSub,
+      testCase "checks float subtraction" testFloatSub,
+      testCase "evaluates mixed subtraction" testMixedSubEval
+    ]
 
 testIntAdd :: IO ()
 testIntAdd = checkOk "int addition" "x: int = 1 + 2;"

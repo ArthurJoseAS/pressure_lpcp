@@ -1,14 +1,23 @@
 module Ast.ControlTest
-  ( testIfExpressionEval,
-    testIfStatementEval,
-    testIfElseStatementEval,
-    testUnaryNegEval,
-    testUnaryNotEval,
+  ( controlTests,
   )
 where
 
 import Ast hiding (Error)
 import TestUtil
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+controlTests :: TestTree
+controlTests =
+  testGroup
+    "control"
+    [ testCase "evaluates if expressions" testIfExpressionEval,
+      testCase "evaluates if statements" testIfStatementEval,
+      testCase "evaluates if-else statements" testIfElseStatementEval,
+      testCase "evaluates unary negation" testUnaryNegEval,
+      testCase "evaluates unary not" testUnaryNotEval
+    ]
 
 testIfExpressionEval :: IO ()
 testIfExpressionEval = do

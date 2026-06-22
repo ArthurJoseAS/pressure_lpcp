@@ -1,20 +1,25 @@
-module Lexer.LexerTest (testLexer) where
+module Lexer.LexerTest (lexerTests) where
 
 import Lexer (AlexPosn (..), Token (..), tokenizeEither)
 import TestUtil
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
 
-testLexer :: IO ()
-testLexer = do
-  testTokenizeKeywords
-  testTokenizeOperators
-  testTokenizeDelimiters
-  testTokenizeIdentifiers
-  testTokenizeNumbers
-  testTokenizeDeclaration
-  testTokenizeEqualityOperator
-  testTokenizeComment
-  testTokenizePositions
-  testTokenizeInvalidCharacter
+lexerTests :: TestTree
+lexerTests =
+  testGroup
+    "lexer"
+    [ testCase "tokenizes keywords" testTokenizeKeywords,
+      testCase "tokenizes operators" testTokenizeOperators,
+      testCase "tokenizes delimiters" testTokenizeDelimiters,
+      testCase "tokenizes identifiers" testTokenizeIdentifiers,
+      testCase "tokenizes numbers" testTokenizeNumbers,
+      testCase "tokenizes declarations" testTokenizeDeclaration,
+      testCase "tokenizes equality operator" testTokenizeEqualityOperator,
+      testCase "skips comments" testTokenizeComment,
+      testCase "tracks positions" testTokenizePositions,
+      testCase "rejects invalid characters" testTokenizeInvalidCharacter
+    ]
 
 testTokenizeKeywords :: IO ()
 testTokenizeKeywords = do

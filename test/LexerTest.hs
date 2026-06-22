@@ -1,3 +1,3 @@
-module LexerTest (testLexer) where
+module LexerTest (lexerTests) where
 
-import Lexer.LexerTest (testLexer)
+import Lexer.LexerTest (lexerTests)

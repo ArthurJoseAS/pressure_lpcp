@@ -1,15 +1,5 @@
 module Ast.ErrorTest
-  ( testBoolInArithmeticError,
-    testBoolInArithmeticRightError,
-    testTypeMismatchError,
-    testFloatNarrowingError,
-    testUndefinedVariableTypeError,
-    testMissingAnnotationError,
-    testDuplicateParamsRejected,
-    testDuplicateFunctionsRejected,
-    testDuplicateDeclarationsRejected,
-    testTypeErrorMessageFormat,
-    testRuntimeErrorMessageFormat,
+  ( errorTests,
   )
 where
 
@@ -18,6 +8,25 @@ import Ast.Typecheck qualified as T
 import Eval qualified as Eval
 import Lexer (AlexPosn (..))
 import TestUtil
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
+
+errorTests :: TestTree
+errorTests =
+  testGroup
+    "errors"
+    [ testCase "rejects bool on left of arithmetic" testBoolInArithmeticError,
+      testCase "rejects bool on right of arithmetic" testBoolInArithmeticRightError,
+      testCase "rejects type mismatches" testTypeMismatchError,
+      testCase "rejects float narrowing" testFloatNarrowingError,
+      testCase "rejects undefined variables" testUndefinedVariableTypeError,
+      testCase "rejects missing annotations" testMissingAnnotationError,
+      testCase "rejects duplicate parameters" testDuplicateParamsRejected,
+      testCase "rejects duplicate functions" testDuplicateFunctionsRejected,
+      testCase "rejects duplicate declarations" testDuplicateDeclarationsRejected,
+      testCase "formats type errors" testTypeErrorMessageFormat,
+      testCase "formats runtime errors" testRuntimeErrorMessageFormat
+    ]
 
 testBoolInArithmeticError :: IO ()
 testBoolInArithmeticError = checkErr "bool in arithmetic" "x: int = true + 1;"

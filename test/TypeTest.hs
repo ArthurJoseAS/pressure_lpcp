@@ -1,17 +1,22 @@
-module TypeTest (testType) where
+module TypeTest (typeTests) where
 
 import Ast
 import Lexer (AlexPosn (..), runAlex)
 import Parser (parseProgram)
 import TestUtil (assertEqual, assertLeft, assertOk, identFrom, pos0)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
 
-testType :: IO ()
-testType = do
-  testBinaryExprTypes
-  testUnaryExprTypes
-  testIfFnExprTypes
-  testTopLevelTypes
-  testReplTypes
+typeTests :: TestTree
+typeTests =
+  testGroup
+    "types"
+    [ testCase "checks binary expression types" testBinaryExprTypes,
+      testCase "checks unary expression types" testUnaryExprTypes,
+      testCase "checks if and function expression types" testIfFnExprTypes,
+      testCase "checks top-level types" testTopLevelTypes,
+      testCase "checks repl types" testReplTypes
+    ]
 
 intType :: Type
 intType = IntType pos0 Signed I32

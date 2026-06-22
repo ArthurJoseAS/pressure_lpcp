@@ -95,10 +95,10 @@ executable pressure-lang
 
   -- Other library packages from which modules are imported.
   build-depends:
-    , array        >=0.5.8     && <0.6
-    , base         ^>=4.20.2.0
-    , containers   >=0.7       && <0.8
-    , mtl          >=2.3.1     && <2.4
+    , array          >=0.5.8     && <0.6
+    , base           ^>=4.20.2.0
+    , containers     >=0.7       && <0.8
+    , mtl            >=2.3.1     && <2.4
     , pressure-lang
 
   -- Directories containing source files.
@@ -132,6 +132,8 @@ test-suite pressure-lang-test
     , containers     >=0.7       && <0.8
     , mtl            >=2.3.1     && <2.4
     , pressure-lang
+    , tasty
+    , tasty-hunit
 
   hs-source-dirs:   test
   default-language: GHC2024
