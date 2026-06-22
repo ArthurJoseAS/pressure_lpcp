@@ -44,7 +44,7 @@ age : u8 : 42;
 ```odin
 // match and if statements can evaluate to a expression.
 ok :: if name == "Lee" {true} else {false};
-let val = match (result) {
+val :: match result {
     100 => ok,
     200 => { /* Block with expression in the end. */ },
     _ => ..., // Some expr.
