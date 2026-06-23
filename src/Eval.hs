@@ -313,7 +313,6 @@ evalBoolBin _ op va vb = case (va, vb) of
 
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
-  s | isFunctionItemStmt s -> return VUnit
   TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident pos name) typ mExpr)) -> evalDeclExpr pos name typ mExpr
   TypedStmt _ (TypedAssignStmt (TypedAssign name expr)) -> do
     val <- evalExpr expr
@@ -330,10 +329,6 @@ evalDeclExpr _ name typ mExpr = do
   return VUnit
 
 -- Function items
-
-isFunctionItemStmt :: TypedStmt -> Bool
-isFunctionItemStmt (TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant _ _ (Just (TypedExpr _ _ (TypedFnExpr {})))))) = True
-isFunctionItemStmt _ = False
 
 installFunctionItems :: [TypedStmt] -> Eval ()
 installFunctionItems stmts = do
@@ -383,8 +378,10 @@ evalRepl :: TypedRepl -> Eval Value
 evalRepl (Repl inputs) = do
   modify pushScope
   installFunctionItems $ mapMaybe isStmtAndFunctionItem inputs
-  mapM_ evalReplInput inputs
-  return VUnit
+  evaluated <- mapM evalReplInput inputs
+  case reverse evaluated of
+    [] -> return VUnit
+    (x : _) -> return x
   where
     isStmtAndFunctionItem (ReplStmt s) = functionStmt s
     isStmtAndFunctionItem _ = Nothing
@@ -392,5 +389,4 @@ evalRepl (Repl inputs) = do
 evalReplInput :: TypedReplInput -> Eval Value
 evalReplInput = \case
   ReplExpr e -> evalExpr e
-  ReplStmt s | isFunctionItemStmt s -> installFunctionItems [s] >> return VUnit
   ReplStmt s -> evalStmt s >> return VUnit

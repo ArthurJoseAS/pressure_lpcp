@@ -85,9 +85,7 @@ render :: String -> Error -> String
 render source err =
   let (mPos, msg) = case err of
         ParseError e -> parseErrorInfo e
-        TypeError e ->
-          let (pos, m) = Type.errorInfo e
-           in (Just pos, m)
+        TypeError e -> let (pos, m) = Type.errorInfo e in (Just pos, m)
         RuntimeError e -> Eval.errorInfo e
         Exit -> (Nothing, "")
       header = case mPos of

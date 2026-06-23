@@ -434,9 +434,9 @@ checkAssign (ParsedAssign (Ident pos name) expr) = do
 bindIdent :: Ident -> Type -> Mutability -> Check ()
 bindIdent (Ident pos name) typ mut = do
   env <- getEnv
-  case env of
-    scope : _ | Map.member name scope -> liftEither $ Left $ DuplicateDeclaration pos name
-    _ -> modifyEnv (bindInCurrentScope name (typ, mut))
+  case lookupName name env of
+    Just _ -> liftEither $ Left $ DuplicateDeclaration pos name
+    Nothing -> modifyEnv (bindInCurrentScope name (typ, mut))
 
 checkParam :: Param -> Check TypedParam
 checkParam (Param ident typ) = TypedParam ident <$> checkType typ
@@ -459,8 +459,8 @@ installFunctionItems stmts = do
   let fns = functionItems stmts
   checkDuplicateFunctions (fnItemsPos fns) (map (identName . fnItemIdent) fns)
   typedFns <- mapM typeFunctionItem fns
-  modifyEnv pushScope
-  mapM_ (\(Ident _ name, typ) -> modifyEnv (bindInCurrentScope name (typ, Constant))) typedFns
+  unless (null fns) $ modifyEnv pushScope
+  mapM_ (\(Ident pos name, typ) -> bindIdent (Ident pos name) typ Constant) typedFns
 
 data FunctionItem = FunctionItem Ident [Param] TypeSyntax
 
