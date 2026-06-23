@@ -12,6 +12,7 @@
 - [x] Add support for assignment operators.
 - [x] Add support for loops (grammar, interpreter) - Lima
 - [ ] Add support for arrays (grammar, interpreter) - Skeete
+- [ ] Add string literals.
 - [ ] Add support for pointers (grammar, interpreter)
 - [ ] Add support for structs (grammar, interpreter) - Samuel
 - [ ] Add support for enums (grammar, interpreter)
