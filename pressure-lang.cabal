@@ -59,14 +59,24 @@ common warnings
 library
   import:             warnings
   exposed-modules:
-    Ast
-    Ast.Syntax
-    Ast.Typecheck
-    Eval
-    Lang
-    Lexer
-    Parser
+    Pressure
+    Pressure.Builtins
+    Pressure.Interpreter
+    Pressure.Interpreter.Env
+    Pressure.Interpreter.Error
+    Pressure.Interpreter.Eval
+    Pressure.Interpreter.Repl
+    Pressure.Interpreter.Value
+    Pressure.Language.Ast
+    Pressure.Language.Lexer
+    Pressure.Language.Parser
+    Pressure.Language.Types
+    Pressure.Typechecker
+    Pressure.Typechecker.Check
+    Pressure.Typechecker.Env
+    Pressure.Typechecker.Error
 
+  other-modules:
   build-depends:
     , array       >=0.5.8     && <0.6
     , base        ^>=4.20.2.0
@@ -110,23 +120,23 @@ executable pressure-lang
 test-suite pressure-lang-test
   import:           warnings
   type:             exitcode-stdio-1.0
-  main-is:          Test.hs
+  main-is:          Main.hs
   other-modules:
-    Ast.ArithTest
-    Ast.AssignTest
-    Ast.ControlTest
-    Ast.ErrorTest
-    Ast.FunctionTest
-    Ast.LiteralTest
-    AstTest
-    Lexer.LexerTest
-    LexerTest
-    Parser.ErrorTest
-    Parser.ProgramTest
-    Parser.ReplTest
-    ParserTest
-    TestUtil
-    TypeTest
+    Pressure.BuiltinsTest
+    Pressure.Language.Ast.ArithTest
+    Pressure.Language.Ast.AssignTest
+    Pressure.Language.Ast.ControlTest
+    Pressure.Language.Ast.ErrorTest
+    Pressure.Language.Ast.FunctionTest
+    Pressure.Language.Ast.LiteralTest
+    Pressure.Language.AstTest
+    Pressure.Language.LexerTest
+    Pressure.Language.Parser.ErrorTest
+    Pressure.Language.Parser.ProgramTest
+    Pressure.Language.Parser.ReplTest
+    Pressure.Language.ParserTest
+    Pressure.TestUtil
+    Pressure.TypecheckerTest
 
   build-depends:
     , base           ^>=4.20.2.0
