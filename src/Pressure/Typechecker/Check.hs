@@ -121,28 +121,20 @@ checkIfExpr pos c t mElse = do
 checkWhileExpr :: AlexPosn -> ParsedExpr -> ParsedBlock -> Maybe ParsedBlock -> Check TypedExpr
 checkWhileExpr pos cond body mElse = do
   tc <- checkExprM cond
-  unless (isBoolLike (typeOf tc)) $
-    liftEither $
-      Left $
-        TypeMismatch pos (typeOf tc) BoolT
+  unless (isBoolLike (typeOf tc)) $ liftEither $ Left $ TypeMismatch pos (typeOf tc) BoolT
 
   pushLoop
   tb <- withScope (checkBlockM body)
-
-  unless (blockType tb == UnitT) $
-    liftEither $
-      Left $
-        NonUnitLoopBody pos (blockType tb)
+  unless (blockType tb == UnitT) $ liftEither $ Left $ NonUnitLoopBody pos (blockType tb)
 
   breakTypes <- popLoop
   te <- traverse checkBlockM mElse
-  let elseTy = maybe UnitT blockType te
+  ty <- case (blockType <$> te, breakTypes) of
+    (Nothing, []) -> return UnitT
+    (Just _, []) -> liftEither $ Left $ ElseWithoutBreak pos
+    (Nothing, _ : _) -> liftEither $ Left $ MissingLoopElse pos
+    (Just t, _) -> liftEither $ foldM (unifyTypes pos) t breakTypes
 
-  ty <- case breakTypes of
-    [] -> return elseTy
-    _ -> do
-      unless (isJust mElse) $ liftEither $ Left $ MissingLoopElse pos
-      liftEither $ foldM (unifyTypes pos) elseTy breakTypes
   return $ TypedExpr pos ty (TypedWhileExpr tc tb te)
 
 unifyTypes :: AlexPosn -> Type -> Type -> Either Error Type

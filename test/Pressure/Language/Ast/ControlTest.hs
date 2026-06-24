@@ -3,9 +3,10 @@ module Pressure.Language.Ast.ControlTest
   )
 where
 
-import Pressure.Language.Types
 import Pressure.Interpreter.Value (Value (..))
+import Pressure.Language.Types
 import Pressure.TestUtil
+import Pressure.Typechecker.Check (checkRepl)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
 
@@ -82,14 +83,7 @@ testUnaryNotEval = do
 
 testWhileElseFalse :: IO ()
 testWhileElseFalse = do
-  withTokens "while else false" "x: i32 = while false {  } else { 42 };" $ \ast -> do
-    result <- evalParsed "while else false" ast
-    case result of
-      Right (_, env) ->
-        case lookupValue "x" env of
-          Just (VInt Signed I32 42) -> return ()
-          other -> error $ "expected x = 42, got " ++ show other
-      Left err -> error $ "eval failed: " ++ show err
+  checkErr "while else without break" "x: i32 = while false {  } else { 42 };"
 
 testWhileBreakValue :: IO ()
 testWhileBreakValue = do

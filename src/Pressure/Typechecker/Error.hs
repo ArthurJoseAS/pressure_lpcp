@@ -17,6 +17,7 @@ data Error
   | ArityMismatch AlexPosn Int Int
   | AssignToConstant AlexPosn String
   | MissingLoopElse AlexPosn
+  | ElseWithoutBreak AlexPosn
   | BreakOutsideLoop AlexPosn
   | ContinueOutsideLoop AlexPosn
   | NonUnitLoopBody AlexPosn Type
@@ -38,6 +39,7 @@ errorPos = \case
   ArityMismatch pos _ _ -> pos
   AssignToConstant pos _ -> pos
   MissingLoopElse pos -> pos
+  ElseWithoutBreak pos -> pos
   BreakOutsideLoop pos -> pos
   ContinueOutsideLoop pos -> pos
   NonUnitLoopBody pos _ -> pos
@@ -60,6 +62,7 @@ errorInfo err =
       ArityMismatch _ expected actual -> "wrong number of arguments: expected " ++ show expected ++ ", got " ++ show actual
       AssignToConstant _ name -> "cannot assign to constant '" ++ name ++ "'"
       MissingLoopElse _ -> "loop with break value must have else clause"
+      ElseWithoutBreak _ -> "loop with else must have a break clause"
       BreakOutsideLoop _ -> "'break' outside of loop"
       ContinueOutsideLoop _ -> "'continue' outside of loop"
       NonUnitLoopBody _ t -> "loop body must have type '()', found '" ++ prettyType t ++ "'"
