@@ -70,6 +70,28 @@ testIfFnExprTypes = do
               (Just (Block [] (Just (expr (ParsedIntLit 2)))))
           )
       )
+  assertEqual "else if desugared expression type" (Right intType) $
+    checkExprType
+      ( expr
+          ( ParsedIfExpr
+              (expr (ParsedBoolLit True))
+              (Block [] (Just (expr (ParsedIntLit 1))))
+              ( Just
+                  ( Block
+                      [] 
+                      ( Just
+                          ( expr
+                              ( ParsedIfExpr
+                                  (expr (ParsedBoolLit False))
+                                  (Block [] (Just (expr (ParsedIntLit 2))))
+                                  (Just (Block [] (Just (expr (ParsedIntLit 3)))))
+                              )
+                          )
+                      )
+                  )
+              )
+          )
+      )
   assertEqual "function expression type" (Right (FnT [intType] intType)) $ checkExprType fnIdExpr
   assertLeft "calling non-function unsupported" $ checkExprType (expr (ParsedCallExpr (expr (ParsedIntLit 1)) []))
   assertLeft "function call arity mismatch" $ checkExprType (expr (ParsedCallExpr fnIdExpr []))
@@ -103,6 +125,7 @@ testTopLevelTypes = do
           ]
       )
   assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (ParsedStmt pos0 (ParsedDeclStmt (ParsedValueDecl Mutable (identFrom "x") Nothing Nothing)))])
+  assertOk "else if syntatic sugar type checks" $ checkSource "main :: fn(x: i32) -> i32 { if x == 1 { 10 } else if x == 2 { 20 } else { 30 } };"
 
 testReplTypes :: IO ()
 testReplTypes = do
