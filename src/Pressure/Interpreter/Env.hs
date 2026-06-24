@@ -16,6 +16,7 @@ type Eval a = StateT Env (ExceptT Error IO) a
 data RuntimeNumber
   = RuntimeInt Sign IntSize Integer
   | RuntimeFloat FloatSize Double
+  deriving (Show, Eq)
 
 asNumber :: Value -> Maybe RuntimeNumber
 asNumber = \case

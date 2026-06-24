@@ -111,6 +111,7 @@ data TypeSyntaxKind
   | StringSyntax
   | UnitSyntax
   | TySyntax
+  | AnyTypeSyntax
   deriving (Show, Eq)
 
 data ParsedExpr = ParsedExpr

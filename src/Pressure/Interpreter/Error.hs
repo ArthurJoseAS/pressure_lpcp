@@ -14,6 +14,7 @@ data RuntimeError
   = DivisionByZero AlexPosn
   | Overflow AlexPosn
   | Underflow AlexPosn
+  | CastError AlexPosn String
   deriving (Eq, Show)
 
 panic :: String -> m a
@@ -27,4 +28,5 @@ errorInfo = \case
   RuntimeError (DivisionByZero pos) -> (Just pos, "division by zero")
   RuntimeError (Overflow pos) -> (Just pos, "integer overflow")
   RuntimeError (Underflow pos) -> (Just pos, "integer underflow")
+  RuntimeError (CastError pos msg) -> (Just pos, "cast error: " ++ msg)
   _ -> (Nothing, "internal error: unexpected control flow")

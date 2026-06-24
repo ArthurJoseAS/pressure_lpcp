@@ -22,6 +22,7 @@ data Error
   | ContinueOutsideLoop AlexPosn
   | NonUnitLoopBody AlexPosn Type
   | InvalidPrintf AlexPosn String
+  | InvalidCast AlexPosn Type Type
   deriving (Show, Eq)
 
 errorPos :: Error -> AlexPosn
@@ -44,6 +45,7 @@ errorPos = \case
   ContinueOutsideLoop pos -> pos
   NonUnitLoopBody pos _ -> pos
   InvalidPrintf pos _ -> pos
+  InvalidCast pos _ _ -> pos
 
 errorInfo :: Error -> (AlexPosn, String)
 errorInfo err =
@@ -67,4 +69,5 @@ errorInfo err =
       ContinueOutsideLoop _ -> "'continue' outside of loop"
       NonUnitLoopBody _ t -> "loop body must have type '()', found '" ++ prettyType t ++ "'"
       InvalidPrintf _ msg -> "@printf: " ++ msg
+      InvalidCast _ target actual -> "invalid cast to '" ++ prettyType target ++ "' from '" ++ prettyType actual ++ "'"
   )

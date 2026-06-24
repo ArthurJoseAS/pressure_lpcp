@@ -22,6 +22,7 @@ data Type
   | StringT
   | UnitT
   | TypeT
+  | AnyTypeT
   deriving (Show, Eq)
 
 prettyType :: Type -> String
@@ -41,6 +42,7 @@ prettyType = \case
   StringT -> "string"
   UnitT -> "unit"
   TypeT -> "type"
+  AnyTypeT -> "anytype"
 
 data UnaryOp
   = NegOp

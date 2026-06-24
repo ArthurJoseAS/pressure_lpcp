@@ -32,6 +32,7 @@ import Pressure.Language.Types
   string         { KwString _ }
   unit           { KwUnit _ }
   type           { KwType _ }
+  anytype        { KwAnyType _ }
   i8             { KwI8 _ }
   i16            { KwI16 _ }
   i32            { KwI32 _ }
@@ -225,23 +226,24 @@ FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1)
 FnParamsTypesList : TypeExpr                       { [$1] }
                   | TypeExpr ',' FnParamsTypesList { $1 : $3 }
 
-TypeLit : type   { TypeSyntax (token_posn $1) TySyntax  }
-        | unit   { TypeSyntax (token_posn $1) UnitSyntax }
-        | bool   { TypeSyntax (token_posn $1) BoolSyntax }
-        | string { TypeSyntax (token_posn $1) StringSyntax }
-        | int    { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
-        | uint   { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
-        | float  { TypeSyntax (token_posn $1) (FloatSyntax F64) }
-        | i8     { TypeSyntax (token_posn $1) (IntSyntax Signed I8) }
-        | i16    { TypeSyntax (token_posn $1) (IntSyntax Signed I16) }
-        | i32    { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
-        | i64    { TypeSyntax (token_posn $1) (IntSyntax Signed I64) }
-        | u8     { TypeSyntax (token_posn $1) (IntSyntax Unsigned I8) }
-        | u16    { TypeSyntax (token_posn $1) (IntSyntax Unsigned I16) }
-        | u32    { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
-        | u64    { TypeSyntax (token_posn $1) (IntSyntax Unsigned I64) }
-        | f32    { TypeSyntax (token_posn $1) (FloatSyntax F32) }
-        | f64    { TypeSyntax (token_posn $1) (FloatSyntax F64) }
+TypeLit : type    { TypeSyntax (token_posn $1) TySyntax }
+        | anytype { TypeSyntax (token_posn $1) AnyTypeSyntax }
+        | unit    { TypeSyntax (token_posn $1) UnitSyntax }
+        | bool    { TypeSyntax (token_posn $1) BoolSyntax }
+        | string  { TypeSyntax (token_posn $1) StringSyntax }
+        | int     { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
+        | uint    { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
+        | float   { TypeSyntax (token_posn $1) (FloatSyntax F64) }
+        | i8      { TypeSyntax (token_posn $1) (IntSyntax Signed I8) }
+        | i16     { TypeSyntax (token_posn $1) (IntSyntax Signed I16) }
+        | i32     { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }
+        | i64     { TypeSyntax (token_posn $1) (IntSyntax Signed I64) }
+        | u8      { TypeSyntax (token_posn $1) (IntSyntax Unsigned I8) }
+        | u16     { TypeSyntax (token_posn $1) (IntSyntax Unsigned I16) }
+        | u32     { TypeSyntax (token_posn $1) (IntSyntax Unsigned I32) }
+        | u64     { TypeSyntax (token_posn $1) (IntSyntax Unsigned I64) }
+        | f32     { TypeSyntax (token_posn $1) (FloatSyntax F32) }
+        | f64     { TypeSyntax (token_posn $1) (FloatSyntax F64) }
 
 {
 parseError :: Token -> Alex a

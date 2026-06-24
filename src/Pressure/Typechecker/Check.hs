@@ -6,7 +6,7 @@ import Control.Monad.State (MonadState (..), StateT (runStateT), put)
 import Data.Functor (void)
 import Data.Map qualified as Map
 import Data.Maybe (isJust, mapMaybe)
-import Pressure.Builtins (checkPrintfCall, initialTypeEnv, isPrintf)
+import Pressure.Builtins (checkAsCall, checkPrintfCall, initialTypeEnv, isAs, isPrintf)
 import Pressure.Language.Ast
 import Pressure.Language.Lexer (AlexPosn (..))
 import Pressure.Language.Types
@@ -28,6 +28,7 @@ checkType (TypeSyntax pos k) = case k of
   BoolSyntax -> return BoolT
   UnitSyntax -> return UnitT
   TySyntax -> return TypeT
+  AnyTypeSyntax -> return AnyTypeT
   IntSyntax sign size -> return $ IntT sign size
   FloatSyntax size -> return $ FloatT size
   FnSyntax params ret -> FnT <$> mapM checkType params <*> checkType ret
@@ -198,6 +199,7 @@ checkCallExpr pos callee args = do
   typedArgs <- mapM checkExprM args
   case typeOf typedCallee of
     _ | isPrintf typedCallee -> checkPrintfCall pos typedCallee typedArgs
+    _ | isAs typedCallee -> checkAsCall pos typedCallee typedArgs
     FnT paramTypes ret -> do
       unless (length paramTypes == length typedArgs) $
         liftEither $
@@ -255,6 +257,9 @@ compatible t1 t2 = case (t1, t2) of
   (BoolT, BoolT) -> True
   (StringT, StringT) -> True
   (UnitT, UnitT) -> True
+  (TypeT, TypeT) -> True
+  (AnyTypeT, _) -> True
+  (_, AnyTypeT) -> True
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
   (_, _) -> False
 

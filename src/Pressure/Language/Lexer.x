@@ -32,6 +32,7 @@ tokens :-
   unit                               { mkToken KwUnit }
   byte                               { mkToken KwByte }
   type                               { mkToken KwType }
+  anytype                            { mkToken KwAnyType }
   i8                                 { mkToken KwI8 }
   i16                                { mkToken KwI16 }
   i32                                { mkToken KwI32 }
@@ -108,6 +109,7 @@ data Token
   | KwUnit AlexPosn
   | KwByte AlexPosn
   | KwType AlexPosn
+  | KwAnyType AlexPosn
   | KwI8 AlexPosn
   | KwI16 AlexPosn
   | KwI32 AlexPosn
@@ -182,6 +184,7 @@ token_posn (KwString p) = p
 token_posn (KwUnit p)   = p
 token_posn (KwByte p)   = p
 token_posn (KwType p)   = p
+token_posn (KwAnyType p)   = p
 token_posn (KwI8 p)     = p
 token_posn (KwI16 p)    = p
 token_posn (KwI32 p)    = p
@@ -290,6 +293,7 @@ prettyToken = \case
   KwUnit _ -> "keyword 'unit'"
   KwByte _ -> "keyword 'byte'"
   KwType _ -> "keyword 'type'"
+  KwAnyType _ -> "keyword 'anytype'"
   KwI8 _ -> "keyword 'i8'"
   KwI16 _ -> "keyword 'i16'"
   KwI32 _ -> "keyword 'i32'"
