@@ -3,11 +3,11 @@ module Pressure.Language.Ast.AssignTest
   )
 where
 
-import Pressure.Language.Types
 import Pressure.Interpreter.Value (Value (..))
+import Pressure.Language.Types
+import Pressure.TestUtil
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
-import Pressure.TestUtil
 
 assignTests :: TestTree
 assignTests =
@@ -51,7 +51,7 @@ testMultipleAssign =
 
 testAssignInBlock :: IO ()
 testAssignInBlock =
-  withTokens "assign in block" "x: int = 1; if true { x = 2; }" $ \ast -> do
+  withTokens "assign in block" "x: int = 1; if true { x = 2; };" $ \ast -> do
     result <- evalParsed "assign in block" ast
     case result of
       Right (_, env) ->

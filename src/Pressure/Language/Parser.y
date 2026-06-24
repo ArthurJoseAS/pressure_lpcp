@@ -13,75 +13,75 @@ import Pressure.Language.Types
 %lexer { lexer } { TokenEOF }
 
 %token
-  if            { KwIf _ }
-  else          { KwElse _ }
-  while         { KwWhile _ }
-  true          { KwTrue _ }
-  false         { KwFalse _ }
-  for           { KwFor _ }
-  continue      { KwContinue _ }
-  break         { KwBreak _ }
-  fn            { KwFn _ }
-  struct        { KwStruct _ }
-  enum          { KwEnum _ }
-  return        { KwReturn _ }
-  int           { KwInt _ }
-  uint          { KwUint _ }
-  float         { KwFloat _ }
-  bool          { KwBool _ }
-  string        { KwString _ }
-  unit          { KwUnit _ }
-  i8            { KwI8 _ }
-  i16           { KwI16 _ }
-  i32           { KwI32 _ }
-  i64           { KwI64 _ }
-  u8            { KwU8 _ }
-  u16           { KwU16 _ }
-  u32           { KwU32 _ }
-  u64           { KwU64 _ }
-  f32           { KwF32 _ }
-  f64           { KwF64 _ }
-  '='           { Equal _ }
-  '<'           { Lt _ }
-  '>'           { Gt _ }
-  '=='          { CmpEq _ }
-  '!='          { CmpNeq _ }
-  '<='          { CmpLeq _ }
-  '>='          { CmpGeq _ }
-  '->'          { ArrowRight _ }
-  '+='          { AddAssign _ }
-  '-='          { SubAssign _ }
-  '*='          { MulAssign _ }
-  '/='          { DivAssign _ }
-  and           { KwAnd _ }
-  or            { KwOr _ }
-  '!'           { KwNot _ }
-  '+'           { Plus _ }
-  '-'           { Minus _ }
-  '>>'          { ShiftRight _ }
-  '<<'          { ShiftLeft _ }
-  '*'           { Times _ }
-  '/'           { Div _ }
-  '&'           { Ampersand _ }
-  '('           { OpenPar _ }
-  ')'           { ClosePar _ }
-  '{'           { OpenBraces _ }
-  '}'           { CloseBraces _ }
-  '['           { OpenBrack _ }
-  ']'           { CloseBrack _ }
-  '::'          { DoubleDot _ }
-  '.'           { Dot _ }
-  ','           { Comma _ }
-  ';'           { Semicolon _ }
-  ':'           { Colon _ }
-  "'"           { SingleQuote _ }
-  '"'           { DoubleQuote _ }
-  ID            { Id _ _ }
-  INT_LITERAL   { IntLiteral _ _ }
-  FLOAT_LITERAL { FloatLiteral _ _ }
+  if             { KwIf _ }
+  else           { KwElse _ }
+  while          { KwWhile _ }
+  true           { KwTrue _ }
+  false          { KwFalse _ }
+  for            { KwFor _ }
+  continue       { KwContinue _ }
+  break          { KwBreak _ }
+  fn             { KwFn _ }
+  struct         { KwStruct _ }
+  enum           { KwEnum _ }
+  return         { KwReturn _ }
+  int            { KwInt _ }
+  uint           { KwUint _ }
+  float          { KwFloat _ }
+  bool           { KwBool _ }
+  string         { KwString _ }
+  unit           { KwUnit _ }
+  i8             { KwI8 _ }
+  i16            { KwI16 _ }
+  i32            { KwI32 _ }
+  i64            { KwI64 _ }
+  u8             { KwU8 _ }
+  u16            { KwU16 _ }
+  u32            { KwU32 _ }
+  u64            { KwU64 _ }
+  f32            { KwF32 _ }
+  f64            { KwF64 _ }
+  '='            { Equal _ }
+  '<'            { Lt _ }
+  '>'            { Gt _ }
+  '=='           { CmpEq _ }
+  '!='           { CmpNeq _ }
+  '<='           { CmpLeq _ }
+  '>='           { CmpGeq _ }
+  '->'           { ArrowRight _ }
+  '+='           { AddAssign _ }
+  '-='           { SubAssign _ }
+  '*='           { MulAssign _ }
+  '/='           { DivAssign _ }
+  and            { KwAnd _ }
+  or             { KwOr _ }
+  '!'            { KwNot _ }
+  '+'            { Plus _ }
+  '-'            { Minus _ }
+  '>>'           { ShiftRight _ }
+  '<<'           { ShiftLeft _ }
+  '*'            { Times _ }
+  '/'            { Div _ }
+  '&'            { Ampersand _ }
+  '('            { OpenPar _ }
+  ')'            { ClosePar _ }
+  '{'            { OpenBraces _ }
+  '}'            { CloseBraces _ }
+  '['            { OpenBrack _ }
+  ']'            { CloseBrack _ }
+  '::'           { DoubleDot _ }
+  '.'            { Dot _ }
+  ','            { Comma _ }
+  ';'            { Semicolon _ }
+  ':'            { Colon _ }
+  "'"            { SingleQuote _ }
+  '"'            { DoubleQuote _ }
+  ID             { Id _ _ }
+  INT_LITERAL    { IntLiteral _ _ }
+  FLOAT_LITERAL  { FloatLiteral _ _ }
   STRING_LITERAL { StringLiteral _ _ }
-  BUILTIN_ID    { BuiltinId _ _ }
-  UnitLit       { UnitLit _ }
+  BUILTIN_ID     { BuiltinId _ _ }
+  UnitLit        { UnitLit _ }
 
 %%
 
@@ -112,9 +112,8 @@ AssignStmt : ID '=' Expr  { ParsedAssign (toIdent $1) $3 }
            | ID '*=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
            | ID '/=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
 
-ValueDecl : ID ':' Type               { ParsedValueDecl Mutable (toIdent $1) (Just $3) Nothing }
-          | ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 (Just $5) }
-          | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 (Just $5) }
+ValueDecl : ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 $5 }
+          | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 $5 }
 
 {- expressions -}
 

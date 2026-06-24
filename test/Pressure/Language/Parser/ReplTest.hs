@@ -1,12 +1,12 @@
 module Pressure.Language.Parser.ReplTest (parserReplTests) where
 
 import Pressure.Language.Ast
-import Pressure.Language.Types (Mutability (Mutable), BinaryOp (AddOp))
 import Pressure.Language.Lexer (runAlex)
 import Pressure.Language.Parser (parseRepl)
+import Pressure.Language.Types (BinaryOp (AddOp), Mutability (Mutable))
+import Pressure.TestUtil (assertRight)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
-import Pressure.TestUtil (assertRight)
 
 parserReplTests :: TestTree
 parserReplTests = testGroup "repl" [testCase "parses repl input" testParseRepl]
@@ -17,14 +17,14 @@ testParseRepl = do
     assertRight "repl: declaration without semicolon" $
       runAlex "x: int = 42" parseRepl
   case ast of
-    Repl [ReplStmt (ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Mutable _ (Just (TypeSyntax _ (IntSyntax _ _))) (Just (ParsedExpr _ (ParsedIntLit 42))))))] -> return ()
+    Repl [ReplStmt (ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Mutable _ (Just (TypeSyntax _ (IntSyntax _ _))) (ParsedExpr _ (ParsedIntLit 42)))))] -> return ()
     other -> error $ "unexpected AST for repl declaration: " ++ show other
 
   ast2 <-
     assertRight "repl: declaration with semicolon" $
       runAlex "x: int = 42;" parseRepl
   case ast2 of
-    Repl [ReplStmt (ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Mutable _ (Just (TypeSyntax _ (IntSyntax _ _))) (Just (ParsedExpr _ (ParsedIntLit 42))))))] -> return ()
+    Repl [ReplStmt (ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Mutable _ (Just (TypeSyntax _ (IntSyntax _ _))) (ParsedExpr _ (ParsedIntLit 42)))))] -> return ()
     other -> error $ "unexpected AST for repl declaration stmt: " ++ show other
 
   ast3 <-

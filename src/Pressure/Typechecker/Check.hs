@@ -1,12 +1,12 @@
 module Pressure.Typechecker.Check where
 
-import Control.Monad (foldM, unless, when, zipWithM_)
+import Control.Monad (foldM, unless, when)
 import Control.Monad.Except (liftEither)
 import Control.Monad.State (MonadState (..), StateT (runStateT), put)
 import Data.Functor (void)
 import Data.Map qualified as Map
 import Data.Maybe (isJust, mapMaybe)
-import Pressure.Builtins (countPlaceholders, initialTypeEnv)
+import Pressure.Builtins (checkPrintfCall, initialTypeEnv, isPrintf)
 import Pressure.Language.Ast
 import Pressure.Language.Lexer (AlexPosn (..))
 import Pressure.Language.Types
@@ -26,11 +26,11 @@ checkType :: TypeSyntax -> Check Type
 checkType (TypeSyntax pos k) = case k of
   NameSyntax name -> liftEither $ Left $ UndefinedType pos name
   BoolSyntax -> return BoolT
+  UnitSyntax -> return UnitT
   IntSyntax sign size -> return $ IntT sign size
   FloatSyntax size -> return $ FloatT size
   FnSyntax params ret -> FnT <$> mapM checkType params <*> checkType ret
   StringSyntax -> return StringT
-  UnitSyntax -> return UnitT
 
 -- Program
 
@@ -176,11 +176,11 @@ checkFnExpr pos params ret body = do
   mapM_ bindTypedParam typedParams
   typedBody <- checkBlockM body
   put outerState
-  unless (compatible typedRet (blockType typedBody)) $
-    liftEither $
-      Left $
-        TypeMismatch pos typedRet (blockType typedBody)
-  return $ TypedExpr pos (FnT (map typedParamType typedParams) typedRet) (TypedFnExpr typedParams typedRet typedBody)
+  unless (compatible typedRet (blockType typedBody)) $ liftEither $ tymismatch typedRet typedBody
+  return $ tyexpr (map typedParamType typedParams) typedParams typedRet typedBody
+  where
+    tymismatch r b = Left $ TypeMismatch pos r (blockType b)
+    tyexpr ts ps r b = TypedExpr pos (FnT ts r) (TypedFnExpr ps r b)
 
 checkDuplicateParams :: [Param] -> Check ()
 checkDuplicateParams = go Map.empty
@@ -207,33 +207,6 @@ checkCallExpr pos callee args = do
   where
     checkArg (expected, actual) =
       unless (compatible expected (typeOf actual)) $ liftEither $ Left $ TypeMismatch pos expected (typeOf actual)
-
-isPrintf :: TypedExpr -> Bool
-isPrintf (TypedExpr _ _ (TypedVarExpr (Ident _ "@printf"))) = True
-isPrintf _ = False
-
-checkPrintfCall :: AlexPosn -> TypedExpr -> [TypedExpr] -> Check TypedExpr
-checkPrintfCall pos callee args = case args of
-  [] -> liftEither $ Left $ InvalidPrintf pos "expected at least a format string argument"
-  (fmtExpr : formatArgs) -> do
-    unless (typeOf fmtExpr == StringT) $ liftEither $ Left $ InvalidPrintf pos "first argument must be a string"
-    case typedExprKind fmtExpr of
-      TypedStringLit fmt -> do
-        let placeholders = countPlaceholders fmt
-        unless (placeholders == length formatArgs) $ liftEither $ Left $ InvalidPrintf pos $ placeholdersErr placeholders
-        zipWithM_ checkPrintableFormatArg [1 ..] formatArgs
-      _ -> liftEither $ Left $ InvalidPrintf pos "format string must be a literal"
-    return $ TypedExpr pos UnitT (TypedCallExpr callee args)
-    where
-      placeholdersErr placeholders = "expected " ++ show placeholders ++ " arguments for placeholders, got " ++ show (length formatArgs)
-
-checkPrintableFormatArg :: Int -> TypedExpr -> Check ()
-checkPrintableFormatArg idx arg =
-  unless (isPrintable (typeOf arg)) $
-    liftEither $
-      Left $
-        InvalidPrintf (typedExprPos arg) $
-          "argument " ++ show idx ++ " has non-printable type '" ++ prettyType (typeOf arg) ++ "'"
 
 checkBinaryExpr :: AlexPosn -> BinaryOp -> ParsedExpr -> ParsedExpr -> Check TypedExpr
 checkBinaryExpr pos op l r = do
@@ -294,15 +267,6 @@ isBoolLike = \case
   BoolT -> True
   _ -> False
 
-isPrintable :: Type -> Bool
-isPrintable = \case
-  IntT {} -> True
-  FloatT {} -> True
-  BoolT -> True
-  StringT -> True
-  UnitT -> True
-  _ -> False
-
 -- Statements
 
 checkStmt :: ParsedStmt -> Either Error TypedStmt
@@ -315,7 +279,7 @@ checkStmtM (ParsedStmt pos k) = case k of
   ParsedAssignStmt assign -> TypedStmt pos . TypedAssignStmt <$> checkAssign assign
 
 checkFunctionItemStmt :: ParsedStmt -> Check TypedStmt
-checkFunctionItemStmt (ParsedStmt pos (ParsedDeclStmt (ParsedValueDecl m ident mts (Just expr@(ParsedExpr _ (ParsedFnExpr {})))))) = do
+checkFunctionItemStmt (ParsedStmt pos (ParsedDeclStmt (ParsedValueDecl m ident mts expr@(ParsedExpr _ (ParsedFnExpr {}))))) = do
   te <- checkExprM expr
   let inferred = typeOf te
   typ <- case mts of
@@ -324,28 +288,19 @@ checkFunctionItemStmt (ParsedStmt pos (ParsedDeclStmt (ParsedValueDecl m ident m
       t <- checkType ts
       unless (compatible t inferred) $ liftEither $ Left $ TypeMismatch (identPos ident) t inferred
       return t
-  return $ TypedStmt pos $ TypedDeclStmt $ TypedValueDecl m ident typ (Just te)
+  return $ TypedStmt pos $ TypedDeclStmt $ TypedValueDecl m ident typ te
 checkFunctionItemStmt stmt = checkStmtM stmt
 
 checkDecl :: ParsedDecl -> Check TypedDecl
-checkDecl = \case
-  ParsedValueDecl _ ident Nothing Nothing -> liftEither $ Left (MissingAnnotation (identPos ident))
-  ParsedValueDecl mut ident Nothing (Just expr) -> do
-    typedExpr <- checkExprM expr
-    let inferred = typeOf typedExpr
-    bindIdent ident inferred mut
-    return $ TypedValueDecl mut ident inferred (Just typedExpr)
-  ParsedValueDecl mut i (Just ts) Nothing -> do
-    t <- checkType ts
-    bindIdent i t mut
-    return $ TypedValueDecl mut i t Nothing
-  ParsedValueDecl mut i (Just ts) (Just e) -> do
-    t <- checkType ts
-    te <- checkExprM e
-    let inferred = typeOf te
-    unless (compatible t inferred) $ liftEither $ Left $ TypeMismatch (identPos i) t inferred
-    bindIdent i t mut
-    return $ TypedValueDecl mut i t (Just te)
+checkDecl (ParsedValueDecl mut ident mTs expr) = do
+  mt <- traverse checkType mTs
+  te <- checkExprM expr
+  let inferred = typeOf te
+  case mt of
+    Just t | not $ compatible t inferred -> liftEither $ Left $ TypeMismatch (identPos ident) t inferred
+    _ -> pure ()
+  bindIdent ident inferred mut
+  return $ TypedValueDecl mut ident inferred te
 
 checkAssign :: ParsedAssign -> Check TypedAssign
 checkAssign (ParsedAssign (Ident pos name) expr) = do
@@ -360,6 +315,10 @@ checkAssign (ParsedAssign (Ident pos name) expr) = do
 
 bindIdent :: Ident -> Type -> Mutability -> Check ()
 bindIdent (Ident pos name) typ mut = do
+  case (typ, mut) of
+    (FnT _ _, Mutable) -> liftEither $ Left $ MutableType pos typ
+    _ -> return ()
+
   env <- getEnv
   case lookupName name env of
     Just _ -> liftEither $ Left $ DuplicateDeclaration pos name
@@ -378,7 +337,7 @@ typedParamType (TypedParam _ typ) = typ
 
 functionItem :: ParsedStmt -> Maybe ParsedStmt
 functionItem i = case i of
-  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant _ _ (Just (ParsedExpr _ (ParsedFnExpr {}))))) -> Just i
+  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant _ _ (ParsedExpr _ (ParsedFnExpr {})))) -> Just i
   _ -> Nothing
 
 installFunctionItems :: [ParsedStmt] -> Check ()
@@ -396,7 +355,7 @@ fnItemIdent (FunctionItem ident _ _) = ident
 
 functionItems :: [ParsedStmt] -> [FunctionItem]
 functionItems = mapMaybe $ \case
-  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant ident _ (Just (ParsedExpr _ (ParsedFnExpr params ret _))))) ->
+  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant ident _ (ParsedExpr _ (ParsedFnExpr params ret _)))) ->
     Just (FunctionItem ident params ret)
   _ -> Nothing
 

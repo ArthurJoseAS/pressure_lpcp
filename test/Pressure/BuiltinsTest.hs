@@ -64,7 +64,7 @@ testPrintfNonPrintableArg = do
     Right ast -> return ast
   case TC.checkRepl ast of
     Left (Type.InvalidPrintf _ msg)
-      | msg == "argument 1 has non-printable type 'fn(string) -> ()'" -> return ()
+      | msg == "argument 1 has non-printable type 'fn(string) -> unit'" -> return ()
     other -> error $ "expected InvalidPrintf about non-printable, got " ++ show other
 
 testPrintfCorrect :: IO ()
@@ -95,7 +95,7 @@ testPrintfNonLiteralFormat = do
   case TC.checkRepl ast of
     Left (Type.InvalidPrintf _ "format string must be a literal") -> return ()
     Left other -> error $ "expected InvalidPrintf about literal, got " ++ show other
-    Right _ -> error $ "expected type error but succeeded"
+    Right _ -> error "expected type error but succeeded"
 
 testReadType :: IO ()
 testReadType = do

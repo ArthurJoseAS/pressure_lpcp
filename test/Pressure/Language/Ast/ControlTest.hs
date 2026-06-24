@@ -6,7 +6,6 @@ where
 import Pressure.Interpreter.Value (Value (..))
 import Pressure.Language.Types
 import Pressure.TestUtil
-import Pressure.Typechecker.Check (checkRepl)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
 

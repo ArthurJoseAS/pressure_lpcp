@@ -13,32 +13,13 @@ module Pressure.Interpreter.Eval
 where
 
 import Control.Monad.Except (MonadError (catchError, throwError))
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (get, gets, modify, put)
 import Data.Maybe (mapMaybe)
-import Pressure.Builtins (countPlaceholders, renderFormat)
+import Pressure.Builtins (dispatchBuiltin)
 import Pressure.Interpreter.Env
 import Pressure.Interpreter.Error
 import Pressure.Interpreter.Value
 import Pressure.Language.Ast
-  ( Block (..),
-    Ident (..),
-    Program (..),
-    Repl (..),
-    ReplInput (ReplExpr, ReplStmt),
-    TopLevel (..),
-    TypedAssign (..),
-    TypedBlock,
-    TypedDecl (..),
-    TypedExpr (..),
-    TypedExprKind (..),
-    TypedParam (..),
-    TypedProgram,
-    TypedRepl,
-    TypedReplInput,
-    TypedStmt (..),
-    TypedStmtKind (..),
-  )
 import Pressure.Language.Lexer (AlexPosn (..))
 import Pressure.Language.Types
 
@@ -53,7 +34,7 @@ evalExpr (TypedExpr pos _ kind) = case kind of
   TypedStringLit s -> return (VString s)
   TypedUnaryExpr op e -> evalUnaryExpr pos op e
   TypedBinaryExpr op l r -> evalBinaryExpr pos op l r
-  TypedVarExpr (Ident identPos name) -> evalVarExpr identPos name
+  TypedVarExpr (Ident ipos name) -> evalVarExpr ipos name
   TypedIfExpr c t elseBlock -> evalIfExpr pos c t elseBlock
   TypedWhileExpr c body mElse -> evalWhileExpr pos c body mElse
   TypedFnExpr params ret body -> evalFnExpr params ret body
@@ -115,31 +96,18 @@ evalCallExpr pos callee args = do
   callValue pos fn argVals
 
 callValue :: AlexPosn -> Value -> [Value] -> Eval Value
-callValue pos (VFunction params _ body capturedEnv) argVals = do
-  if length params /= length argVals
-    then panicAt pos ("wrong number of arguments: expected " ++ show (length params) ++ ", got " ++ show (length argVals))
-    else do
-      callerEnv <- get
-      modify $ const $ bindArgs params argVals (pushScope capturedEnv)
-      val <- evalBlock body
-      modify $ const callerEnv
-      return val
-callValue pos (VBuiltin name) args = dispatchBuiltin pos name args
-callValue pos _ _ = panicAt pos "attempted to call non-function reached evaluator"
-
-dispatchBuiltin :: AlexPosn -> String -> [Value] -> Eval Value
-dispatchBuiltin _ "@read" [] = VString <$> liftIO getLine
-dispatchBuiltin pos "@read" _ = panicAt pos "@read takes no arguments"
-dispatchBuiltin pos "@printf" (VString fmt : args) = do
-  let placeholders = countPlaceholders fmt
-  if placeholders /= length args
-    then panicAt pos ("@printf: expected " ++ show placeholders ++ " arguments for placeholders, got " ++ show (length args))
-    else do
-      let rendered = renderFormat fmt args
-      liftIO $ putStr rendered
-      return VUnit
-dispatchBuiltin pos "@printf" _ = panicAt pos "@printf requires a string format as first argument"
-dispatchBuiltin pos name _ = panicAt pos ("unknown builtin: " ++ name)
+callValue pos v args = case v of
+  VBuiltin name -> dispatchBuiltin pos name args
+  VFunction params _ body env -> do
+    if length params /= length args
+      then panicAt pos ("wrong number of arguments: expected " ++ show (length params) ++ ", got " ++ show (length args))
+      else do
+        callerEnv <- get
+        modify $ const $ bindArgs params args (pushScope env)
+        val <- evalBlock body
+        modify $ const callerEnv
+        return val
+  _ -> panicAt pos "attempted to call non-function reached evaluator"
 
 bindArgs :: [TypedParam] -> [Value] -> ValueEnv -> ValueEnv
 bindArgs params argVals env = foldl bind env (zip params argVals)
@@ -228,20 +196,14 @@ evalBoolBin _ op va vb = case (va, vb) of
 
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
-  TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident pos name) typ mExpr)) -> evalDeclExpr pos name typ mExpr
-  TypedStmt _ (TypedAssignStmt (TypedAssign name expr)) -> do
-    val <- evalExpr expr
-    modify (updateInScope name val)
-    return VUnit
+  TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident _ name) _ expr)) -> go bindInCurrentScope name expr
+  TypedStmt _ (TypedAssignStmt (TypedAssign name expr)) -> go updateInScope name expr
   TypedStmt _ (TypedExprStmt expr) -> evalExpr expr >> return VUnit
-
-evalDeclExpr :: AlexPosn -> String -> Type -> Maybe TypedExpr -> Eval Value
-evalDeclExpr _ name typ mExpr = do
-  val <- case mExpr of
-    Just e -> evalExpr e
-    Nothing -> return (defaultValue typ)
-  modify (bindInCurrentScope name val)
-  return VUnit
+  where
+    go bind name expr = do
+      val <- evalExpr expr
+      modify (bind name val)
+      return VUnit
 
 -- Function items
 
@@ -258,13 +220,13 @@ installFunctionItems stmts = do
 
 functionItem :: TypedStmt -> Maybe (String, [TypedParam], Type, TypedBlock)
 functionItem = \case
-  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ name) _ (Just (TypedExpr _ _ (TypedFnExpr params ret body))))) -> Just (name, params, ret, body)
+  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ name) _ (TypedExpr _ _ (TypedFnExpr params ret body)))) -> Just (name, params, ret, body)
   _ -> Nothing
 
 -- TODO: Grrrr, remove this duplication
 functionStmt :: TypedStmt -> Maybe TypedStmt
 functionStmt s = case s of
-  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ _) _ (Just (TypedExpr _ _ (TypedFnExpr _ _ _))))) -> Just s
+  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ _) _ (TypedExpr _ _ (TypedFnExpr {})))) -> Just s
   _ -> Nothing
 
 -- Blocks

@@ -1,14 +1,14 @@
 module Pressure.TypecheckerTest (typeTests) where
 
 import Pressure.Language.Ast
-import Pressure.Language.Types
-import Pressure.Typechecker (checkReplWithEnv, checkRepl, checkProgram, Error)
-import Pressure.Typechecker.Check (checkExpr)
 import Pressure.Language.Lexer (runAlex)
 import Pressure.Language.Parser (parseProgram)
+import Pressure.Language.Types
+import Pressure.TestUtil (assertEqual, assertLeft, assertOk, identFrom, pos0)
+import Pressure.Typechecker (Error, checkProgram, checkRepl, checkReplWithEnv)
+import Pressure.Typechecker.Check (checkExpr)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
-import Pressure.TestUtil (assertEqual, assertLeft, assertOk, identFrom, pos0)
 
 typeTests :: TestTree
 typeTests =
@@ -98,13 +98,12 @@ testTopLevelTypes = do
                           Mutable
                           (identFrom "x")
                           (Just intSyntax)
-                          (Just (expr (ParsedIfExpr (expr (ParsedBoolLit True)) (Block [] (Just (expr (ParsedIntLit 1)))) Nothing)))
+                          (expr (ParsedIfExpr (expr (ParsedBoolLit True)) (Block [] (Just (expr (ParsedIntLit 1)))) Nothing))
                       )
                   )
               )
           ]
       )
-  assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (ParsedStmt pos0 (ParsedDeclStmt (ParsedValueDecl Mutable (identFrom "x") Nothing Nothing)))])
 
 testReplTypes :: IO ()
 testReplTypes = do
@@ -123,7 +122,7 @@ replUnitDecl =
               Mutable
               (identFrom "x")
               Nothing
-              (Just (expr (ParsedIfExpr (expr (ParsedBoolLit False)) (Block [] Nothing) Nothing)))
+              (expr (ParsedIfExpr (expr (ParsedBoolLit False)) (Block [] Nothing) Nothing))
     ]
 
 replUnitAddition :: ParsedRepl

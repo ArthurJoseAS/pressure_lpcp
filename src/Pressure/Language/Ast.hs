@@ -66,11 +66,11 @@ data TypedStmtKind
   deriving (Show, Eq)
 
 data ParsedDecl
-  = ParsedValueDecl Mutability Ident (Maybe TypeSyntax) (Maybe ParsedExpr)
+  = ParsedValueDecl Mutability Ident (Maybe TypeSyntax) ParsedExpr
   deriving (Show, Eq)
 
 data TypedDecl
-  = TypedValueDecl Mutability Ident Type (Maybe TypedExpr)
+  = TypedValueDecl Mutability Ident Type TypedExpr
   deriving (Show, Eq)
 
 data ParsedAssign

@@ -18,18 +18,18 @@ module Pressure.TestUtil
   )
 where
 
-import Pressure.Language.Ast
+import Control.Monad.Except (runExceptT)
+import Control.Monad.State (runStateT)
+import Data.Map.Strict qualified as Map
+import Pressure.Builtins (initialValueEnv)
 import Pressure.Interpreter.Env (Env)
 import Pressure.Interpreter.Error (Error (..), RuntimeError (..))
 import Pressure.Interpreter.Eval (evalExpr, evalRepl)
 import Pressure.Interpreter.Value (Value (..))
+import Pressure.Language.Ast
 import Pressure.Language.Lexer (AlexPosn (..), runAlex)
 import Pressure.Language.Parser (parseRepl)
-import Pressure.Builtins (initialValueEnv)
 import Pressure.Typechecker (checkRepl)
-import Control.Monad.Except (runExceptT)
-import Control.Monad.State (runStateT)
-import Data.Map.Strict qualified as Map
 import Test.Tasty.HUnit qualified as HUnit
 
 assertEqual :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -69,7 +69,7 @@ pos0 :: AlexPosn
 pos0 = AlexPn 0 1 1
 
 identFrom :: String -> Ident
-identFrom name = Ident pos0 name
+identFrom = Ident pos0
 
 emptyEnv :: Env
 emptyEnv = initialValueEnv
@@ -89,7 +89,7 @@ withTokens name source f = do
 checkOk :: String -> String -> IO ()
 checkOk name source =
   withTokens name source $ \ast ->
-        case checkRepl ast of
+    case checkRepl ast of
       Right _ -> return ()
       Left err -> error $ name ++ " failed: " ++ show err
 

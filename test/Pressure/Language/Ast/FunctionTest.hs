@@ -3,18 +3,18 @@ module Pressure.Language.Ast.FunctionTest
   )
 where
 
-import Pressure.Language.Ast
-import Pressure.Language.Types
-import Pressure.Typechecker (checkReplWithEnv)
-import Pressure.Interpreter.Eval (evalRepl, evalReplInput)
-import Pressure.Interpreter.Value (Value (..))
-import Pressure.Language.Lexer (runAlex)
-import Pressure.Language.Parser (parseRepl)
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State (runStateT)
+import Pressure.Interpreter.Eval (evalRepl, evalReplInput)
+import Pressure.Interpreter.Value (Value (..))
+import Pressure.Language.Ast
+import Pressure.Language.Lexer (runAlex)
+import Pressure.Language.Parser (parseRepl)
+import Pressure.Language.Types
+import Pressure.TestUtil
+import Pressure.Typechecker (checkReplWithEnv)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
-import Pressure.TestUtil
 
 functionTests :: TestTree
 functionTests =
@@ -35,7 +35,7 @@ functionTests =
 
 testUnitFunctionSugar :: IO ()
 testUnitFunctionSugar = do
-  withTokens "unit funcition sugar" "sugar :: fn() {}; result: unit  = sugar();" $ \ast -> do
+  withTokens "unit function sugar" "sugar :: fn() {}; result: unit  = sugar();" $ \ast -> do
     result <- evalParsed "unit function sugar" ast
     case result of
       Left err -> error $ "eval failed: " ++ show err

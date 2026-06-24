@@ -3,9 +3,9 @@ module Pressure.Language.Ast.LiteralTest
   )
 where
 
+import Pressure.Interpreter.Value (Value (..))
 import Pressure.Language.Ast
 import Pressure.Language.Types
-import Pressure.Interpreter.Value (Value (..))
 import Pressure.TestUtil
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
@@ -18,10 +18,7 @@ literalTests =
       testCase "evaluates float literals" testFloatLit,
       testCase "evaluates bool literals" testBoolLit,
       testCase "evaluates string literals" testStringLit,
-      testCase "declares and looks up variables" testVarDeclAndLookup,
-      testCase "defaults int variables" testVarDefaultValue,
-      testCase "defaults bool variables" testBoolDefaultValue,
-      testCase "defaults string variables" testStringDefaultValue
+      testCase "declares and looks up variables" testVarDeclAndLookup
     ]
 
 testIntLit :: IO ()
@@ -71,28 +68,6 @@ testVarDeclAndLookup = do
         assertExpr "x after decl" (TypedExpr pos0 UnitT (TypedVarExpr (identFrom "x"))) env (VInt Signed I32 42)
       Left err -> error $ "eval failed: " ++ show err
 
-testVarDefaultValue :: IO ()
-testVarDefaultValue = do
-  withTokens "decl without init" "x: int;" $ \ast -> do
-    result <- evalParsed "decl without init" ast
-    case result of
-      Right (_, env) ->
-        case lookupValue "x" env of
-          Just (VInt Signed I32 0) -> return ()
-          other -> error $ "expected x = 0 for uninitialized int, got " ++ show other
-      Left err -> error $ "eval failed: " ++ show err
-
-testBoolDefaultValue :: IO ()
-testBoolDefaultValue = do
-  withTokens "bool decl without init" "x: bool;" $ \ast -> do
-    result <- evalParsed "bool decl without init" ast
-    case result of
-      Right (_, env) ->
-        case lookupValue "x" env of
-          Just (VBool False) -> return ()
-          other -> error $ "expected x = false for uninitialized bool, got " ++ show other
-      Left err -> error $ "eval failed: " ++ show err
-
 testStringLit :: IO ()
 testStringLit = do
   checkOk "string literal" "x: string = \"hello\";"
@@ -104,14 +79,3 @@ testStringLit = do
         case lookupValue "x" env of
           Just (VString "hello") -> return ()
           other -> error $ "expected \"hello\", got " ++ show other
-
-testStringDefaultValue :: IO ()
-testStringDefaultValue = do
-  withTokens "string decl without init" "x: string;" $ \ast -> do
-    result <- evalParsed "string decl without init" ast
-    case result of
-      Right (_, env) ->
-        case lookupValue "x" env of
-          Just (VString "") -> return ()
-          other -> error $ "expected x = \"\" for uninitialized string, got " ++ show other
-      Left err -> error $ "eval failed: " ++ show err

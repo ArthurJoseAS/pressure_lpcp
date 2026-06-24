@@ -38,7 +38,7 @@ prettyType = \case
   FloatT F64 -> "f64"
   FnT params ret -> "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
   StringT -> "string"
-  UnitT -> "()"
+  UnitT -> "unit"
 
 data UnaryOp
   = NegOp

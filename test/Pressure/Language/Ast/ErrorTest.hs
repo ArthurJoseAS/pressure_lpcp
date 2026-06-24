@@ -3,15 +3,14 @@ module Pressure.Language.Ast.ErrorTest
   )
 where
 
-import Pressure.Language.Ast
-import Pressure.Language.Types
-import Pressure.Typechecker (checkProgram, errorInfo)
-import Pressure.Typechecker.Error qualified as T
-import Pressure.Interpreter.Eval qualified as Eval
+import Pressure.Interpreter.Error qualified as Eval
 import Pressure.Language.Lexer (AlexPosn (..))
+import Pressure.Language.Types
+import Pressure.TestUtil
+import Pressure.Typechecker.Error (errorInfo)
+import Pressure.Typechecker.Error qualified as T
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
-import Pressure.TestUtil
 
 errorTests :: TestTree
 errorTests =
@@ -22,7 +21,6 @@ errorTests =
       testCase "rejects type mismatches" testTypeMismatchError,
       testCase "rejects float narrowing" testFloatNarrowingError,
       testCase "rejects undefined variables" testUndefinedVariableTypeError,
-      testCase "rejects missing annotations" testMissingAnnotationError,
       testCase "rejects duplicate parameters" testDuplicateParamsRejected,
       testCase "rejects duplicate functions" testDuplicateFunctionsRejected,
       testCase "rejects duplicate declarations" testDuplicateDeclarationsRejected,
@@ -50,12 +48,6 @@ testFloatNarrowingError = checkErr "float to int narrowing" "x: int = 3.14;"
 
 testUndefinedVariableTypeError :: IO ()
 testUndefinedVariableTypeError = checkErr "undefined variable" "x: int = y;"
-
-testMissingAnnotationError :: IO ()
-testMissingAnnotationError =
-  case checkProgram (Program [TopLevelStmt (ParsedStmt pos0 (ParsedDeclStmt (ParsedValueDecl Mutable (identFrom "x") Nothing Nothing)))]) of
-    Left _ -> return ()
-    Right () -> error "missing annotation: expected type error but passed"
 
 testDuplicateParamsRejected :: IO ()
 testDuplicateParamsRejected = do
