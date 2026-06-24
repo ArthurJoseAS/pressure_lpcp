@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Lang (repl, run)
+import Pressure.Interpreter.Repl (repl, run)
 import System.Environment (getArgs)
 
 main :: IO ()
