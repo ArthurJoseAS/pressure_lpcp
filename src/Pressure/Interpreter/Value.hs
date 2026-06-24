@@ -12,6 +12,7 @@ data Value
   | VBool Bool
   | VString String
   | VUnit
+  | VType Type
   | VEmpty
   | VFunction [TypedParam] Type TypedBlock ValueEnv
   | VBuiltin String
@@ -25,6 +26,7 @@ instance Show Value where
     VBool False -> "false"
     VString s -> show s
     VUnit -> "()"
+    VType t -> prettyType t
     VFunction {} -> "<function>"
     VBuiltin n -> "<builtin " ++ n ++ ">"
     VEmpty -> undefined

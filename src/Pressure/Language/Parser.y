@@ -31,6 +31,7 @@ import Pressure.Language.Types
   bool           { KwBool _ }
   string         { KwString _ }
   unit           { KwUnit _ }
+  type           { KwType _ }
   i8             { KwI8 _ }
   i16            { KwI16 _ }
   i32            { KwI32 _ }
@@ -130,6 +131,7 @@ Expr : IfExpr        { $1 }
      | ContinueExpr  { $1 }
      | FnExpr        { $1 }
      | LogicalOrExpr { $1 }
+     | TypeLitExpr   { ParsedExpr (typePos $1) (ParsedTypeLit $1) }
 
 IfExpr : if Expr Block            { ParsedExpr (token_posn $1) (ParsedIfExpr $2 $3 Nothing) }
        | if Expr Block else Block { ParsedExpr (token_posn $1) (ParsedIfExpr $2 $3 (Just $5)) }
@@ -142,18 +144,17 @@ BreakExpr : break        { ParsedExpr (token_posn $1) (ParsedBreakExpr (ParsedEx
 
 ContinueExpr : continue  { ParsedExpr (token_posn $1) ParsedContinueExpr }
 
-FnExpr : fn '(' FnParams ')' '->' Type Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 $6 $7) }
-       | fn '(' FnParams ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 (TypeSyntax (token_posn $1) UnitSyntax) $5) }
-       | fn UnitLit '->' Type Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] $4 $5) }
+FnExpr : fn '(' FnParamList ')' '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 $6 $7) }
+       | fn '(' FnParamList ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 (TypeSyntax (token_posn $1) UnitSyntax) $5) }
+       | fn UnitLit '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] $4 $5) }
        | fn UnitLit Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] (TypeSyntax (token_posn $1) UnitSyntax) $3) }
-
-FnParams : FnParamList { $1 }
-         |             { [] }
+       | fn '(' ')' '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] $5 $6) }
+       | fn '(' ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] (TypeSyntax (token_posn $1) UnitSyntax) $4) }
 
 FnParamList : FnParam                 { [$1] }
             | FnParam ',' FnParamList { $1 : $3 }
 
-FnParam : ID ':' Type { Param (toIdent $1) $3 }
+FnParam : ID ':' TypeExpr { Param (toIdent $1) $3 }
 
 LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr OrOp $1 $3) }
               | LogicalAndExpr                  { $1 }
@@ -194,34 +195,38 @@ Args : ArgList { $1 }
 ArgList : Expr             { [$1] }
         | Expr ',' ArgList { $1 : $3 }
 
-AtomExpr : INT_LITERAL   { toIntLit $1 }
-         | FLOAT_LITERAL { toFloatLit $1 }
+AtomExpr : INT_LITERAL    { toIntLit $1 }
+         | FLOAT_LITERAL  { toFloatLit $1 }
          | STRING_LITERAL { toStringLit $1 }
-         | true          { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
-         | false         { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
-         | '(' Expr ')'  { $2 }
-         | UnitLit       { ParsedExpr (token_posn $1) ParsedUnitLit }
-         | ID            { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
-         | BUILTIN_ID    { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
+         | true           { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
+         | false          { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
+         | '(' Expr ')'   { $2 }
+         | UnitLit        { ParsedExpr (token_posn $1) ParsedUnitLit }
+         | ID             { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
+         | BUILTIN_ID     { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
+
 
 {- types -}
 
-OptType : Type { Just $1 }
-        |      { Nothing }
+OptType : TypeExpr { Just $1 }
+        |          { Nothing }
 
-Type : ID       { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
-     | FnType   { $1 }
-     | TypeLit  { $1 }
+TypeExpr : FnType   { $1 }
+         | TypeLit  { $1 }
+         | ID       { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
 
-FnType : fn '(' FnParamsTypes ')' '->' Type { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
+TypeLitExpr : FnType  { $1 }
+            | TypeLit { $1 }
 
-FnParamsTypes : FnParamsTypesList { $1 }
-              |                   { [] }
+FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
+       | fn UnitLit '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $4) }
+       | fn '(' ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $5) }
 
-FnParamsTypesList : Type                       { [$1] }
-                  | Type ',' FnParamsTypesList { $1 : $3 }
+FnParamsTypesList : TypeExpr                       { [$1] }
+                  | TypeExpr ',' FnParamsTypesList { $1 : $3 }
 
-TypeLit : unit   { TypeSyntax (token_posn $1) UnitSyntax }
+TypeLit : type   { TypeSyntax (token_posn $1) TySyntax  }
+        | unit   { TypeSyntax (token_posn $1) UnitSyntax }
         | bool   { TypeSyntax (token_posn $1) BoolSyntax }
         | string { TypeSyntax (token_posn $1) StringSyntax }
         | int    { TypeSyntax (token_posn $1) (IntSyntax Signed I32) }

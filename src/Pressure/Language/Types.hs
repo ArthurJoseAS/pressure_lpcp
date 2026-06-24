@@ -21,6 +21,7 @@ data Type
   | FnT [Type] Type
   | StringT
   | UnitT
+  | TypeT
   deriving (Show, Eq)
 
 prettyType :: Type -> String
@@ -39,6 +40,7 @@ prettyType = \case
   FnT params ret -> "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
   StringT -> "string"
   UnitT -> "unit"
+  TypeT -> "type"
 
 data UnaryOp
   = NegOp

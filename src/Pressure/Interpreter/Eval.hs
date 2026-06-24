@@ -31,6 +31,7 @@ evalExpr (TypedExpr pos _ kind) = case kind of
   TypedFloatLit f -> return (VFloat F64 f)
   TypedBoolLit b -> return (VBool b)
   TypedUnitLit -> return VUnit
+  TypedTypeLit t -> return (VType t)
   TypedStringLit s -> return (VString s)
   TypedUnaryExpr op e -> evalUnaryExpr pos op e
   TypedBinaryExpr op l r -> evalBinaryExpr pos op l r

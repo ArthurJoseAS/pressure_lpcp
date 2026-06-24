@@ -27,6 +27,7 @@ checkType (TypeSyntax pos k) = case k of
   NameSyntax name -> liftEither $ Left $ UndefinedType pos name
   BoolSyntax -> return BoolT
   UnitSyntax -> return UnitT
+  TySyntax -> return TypeT
   IntSyntax sign size -> return $ IntT sign size
   FloatSyntax size -> return $ FloatT size
   FnSyntax params ret -> FnT <$> mapM checkType params <*> checkType ret
@@ -91,6 +92,7 @@ checkExprM (ParsedExpr pos k) = case k of
   ParsedBoolLit b -> return $ TypedExpr pos BoolT (TypedBoolLit b)
   ParsedStringLit s -> return $ TypedExpr pos StringT (TypedStringLit s)
   ParsedUnitLit -> return $ TypedExpr pos UnitT TypedUnitLit
+  ParsedTypeLit ts -> TypedExpr pos TypeT . TypedTypeLit <$> checkType ts
   ParsedUnaryExpr op e -> checkUnaryExpr pos op e
   ParsedBinaryExpr op l r -> checkBinaryExpr pos op l r
   ParsedVarExpr i@(Ident _ name) -> do
@@ -316,6 +318,7 @@ checkAssign (ParsedAssign (Ident pos name) expr) = do
 bindIdent :: Ident -> Type -> Mutability -> Check ()
 bindIdent (Ident pos name) typ mut = do
   case (typ, mut) of
+    (TypeT, Mutable) -> liftEither $ Left $ MutableType pos typ
     (FnT _ _, Mutable) -> liftEither $ Left $ MutableType pos typ
     _ -> return ()
 

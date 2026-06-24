@@ -110,6 +110,7 @@ data TypeSyntaxKind
   | FnSyntax [TypeSyntax] TypeSyntax
   | StringSyntax
   | UnitSyntax
+  | TySyntax
   deriving (Show, Eq)
 
 data ParsedExpr = ParsedExpr
@@ -124,6 +125,7 @@ data ParsedExprKind
   | ParsedBoolLit Bool
   | ParsedStringLit String
   | ParsedUnitLit
+  | ParsedTypeLit TypeSyntax
   | ParsedBinaryExpr BinaryOp ParsedExpr ParsedExpr
   | ParsedUnaryExpr UnaryOp ParsedExpr
   | ParsedVarExpr Ident
@@ -148,6 +150,7 @@ data TypedExprKind
   | TypedBoolLit Bool
   | TypedStringLit String
   | TypedUnitLit
+  | TypedTypeLit Type
   | TypedBinaryExpr BinaryOp TypedExpr TypedExpr
   | TypedUnaryExpr UnaryOp TypedExpr
   | TypedVarExpr Ident
