@@ -24,6 +24,7 @@ module Ast.Syntax
     TypedBlock,
     Param (..),
     TypedParam (..),
+    StructItem (..),
     Repl (..),
     Ident (..),
     Mutability (..),
@@ -157,6 +158,12 @@ data TypeSyntaxKind
   | FloatSyntax FloatSize
   | FnSyntax [TypeSyntax] TypeSyntax
   | UnitSyntax
+  | StructSyntax [StructItem]
+  deriving (Show, Eq)
+
+data StructItem
+  = StructField Ident TypeSyntax
+  | StructMemberDecl ParsedDecl
   deriving (Show, Eq)
 
 data Type
@@ -165,6 +172,8 @@ data Type
   | FloatT FloatSize
   | FnT [Type] Type
   | UnitT
+  -- TODO : Como dividir os atributos da struct dos nomes em seu namespace?
+  | StructT [(String, Type)] -- Deveria ser um map?
   deriving (Show, Eq)
 
 prettyType :: Type -> String
@@ -182,6 +191,7 @@ prettyType = \case
   FloatT F64 -> "f64"
   FnT params ret -> "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
   UnitT -> "()"
+  StructT fields -> "struct { " ++ intercalate ", " (map (\(n, t) -> n ++ ": " ++ prettyType t) fields) ++ " }"
 
 data UnaryOp
   = NegOp
@@ -220,6 +230,11 @@ data ParsedExprKind
   | ParsedIfExpr ParsedExpr ParsedBlock (Maybe ParsedBlock)
   | ParsedFnExpr [Param] TypeSyntax ParsedBlock
   | ParsedCallExpr ParsedExpr [ParsedExpr]
+  -- Maybe pra definir se eh anonima
+  | ParsedStructInit (Maybe Ident) [ParsedAssign]
+  | ParsedMemberAccess ParsedExpr Ident
+  -- NOTE : Since all types are first class citizens, expressions should generate them
+  | ParsedTypeExpr TypeSyntax
   deriving (Show, Eq)
 
 data TypedExpr = TypedExpr
@@ -239,6 +254,8 @@ data TypedExprKind
   | TypedIfExpr TypedExpr TypedBlock (Maybe TypedBlock)
   | TypedFnExpr [TypedParam] Type TypedBlock
   | TypedCallExpr TypedExpr [TypedExpr]
+  | TypedStructInit (Maybe Ident) [(String, TypedExpr)]
+  | TypedMemberAccess TypedExpr Ident
   deriving (Show, Eq)
 
 data Value
@@ -247,6 +264,7 @@ data Value
   | VBool Bool
   | VUnit
   | VFunction [TypedParam] Type TypedBlock
+  | VStruct [(String, Value)]
   | VEmpty
   deriving (Eq)
 
@@ -258,6 +276,7 @@ instance Show Value where
     VBool False -> "false"
     VUnit -> "()"
     VFunction {} -> "<function>"
+    VStruct fields -> "struct { " ++ intercalate ", " (map (\(n, v) -> n ++ " = " ++ show v) fields) ++ " }"
     VEmpty -> undefined
 
 prettyBinaryOp :: BinaryOp -> String

@@ -179,7 +179,10 @@ AtomExpr : INT_LITERAL   { toIntLit $1 }
          | false         { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
          | '(' Expr ')'  { $2 }
          | ID            { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
-
+         | StructInitExpr { $1 }
+         | AtomExpr '.' ID { ParsedExpr (exprPos $1) (ParsedMemberAccess $1 (toIdent $3)) }
+         | TypeLit       { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
+         | StructType    { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
 {- types -}
 
 OptType : Type { Just $1 }
@@ -188,6 +191,7 @@ OptType : Type { Just $1 }
 Type : ID       { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
      | FnType   { $1 }
      | TypeLit  { $1 }
+     | StructType { $1 }
 
 FnType : fn '(' FnParamsTypes ')' '->' Type { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
 
@@ -212,6 +216,31 @@ TypeLit : unit  { TypeSyntax (token_posn $1) UnitSyntax }
         | u64   { TypeSyntax (token_posn $1) (IntSyntax Unsigned I64) }
         | f32   { TypeSyntax (token_posn $1) (FloatSyntax F32) }
         | f64   { TypeSyntax (token_posn $1) (FloatSyntax F64) }
+
+StructType : struct '{' StructItems '}' { TypeSyntax (token_posn $1) (StructSyntax $3) }
+
+StructItems : StructItem StructItems { $1 ++ $2 }
+            |                        { [] }
+
+StructItem : StructField ','  { [$1] }
+           | StructField      { [$1] }
+           | ValueDecl ';'    { [StructMemberDecl $1] }
+
+StructField : ID ':' Type { StructField (toIdent $1) $3 }
+
+StructInitExpr : StructRef '{' StructInitItems '}' { ParsedExpr (fst $1) (ParsedStructInit (snd $1) $3) }
+
+StructRef : '.'  { (token_posn $1, Nothing) }
+          | ID   { (token_posn $1, Just (toIdent $1)) }
+
+StructInitItems : StructInitItemList     { $1 }
+                | StructInitItemList ',' { $1 }
+                |                        { [] }
+
+StructInitItemList : StructInitItem ',' StructInitItemList { $1 : $3 }
+                   | StructInitItem                        { [$1] }
+
+StructInitItem : ID '=' Expr { ParsedAssign (toIdent $1) $3 }
 
 {
 parseError :: Token -> Alex a
