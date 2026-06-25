@@ -32,7 +32,7 @@ import Ast.Syntax
     TopLevel (..),
     Type (..),
     UnaryOp (..),
-    Value (..),
+    Value (..), identName,
   )
 import Ast.Typecheck (TypedBlock, TypedProgram, TypedRepl)
 import Control.Monad.Except (Except, MonadError (throwError))
@@ -132,6 +132,8 @@ defaultValue = \case
   BoolT -> VBool False
   FnT _ _ -> VEmpty
   UnitT -> VUnit
+  -- Recursively calls defaultValue for each field
+  StructT fields -> VStruct (map (\(name, fieldType) -> (name , defaultValue fieldType)) fields)
 
 withNumbers :: AlexPosn -> (RuntimeNumber -> RuntimeNumber -> Eval Value) -> Value -> Value -> Eval Value
 withNumbers pos f va vb =
@@ -152,6 +154,22 @@ evalExpr (TypedExpr pos _ kind) = case kind of
   TypedIfExpr c t elseBlock -> evalIfExpr pos c t elseBlock
   TypedFnExpr params ret body -> evalFnExpr params ret body
   TypedCallExpr callee args -> evalCallExpr pos callee args
+  -- TODO : See what 'pos' can be used for
+  TypedStructInit _ fields -> do
+    evaluatedFields <- mapM (\(name, expr) -> do
+      val <- evalExpr expr -- evaluate field expression (<id> = <expr>)
+      return (name,val)
+      ) fields
+    return $ VStruct evaluatedFields
+  TypedMemberAccess expr fieldId -> do
+    v <- evalExpr expr
+    case v of
+      VStruct fields ->
+        -- fetches the field from the struct
+        case lookup (identName fieldId) fields of
+          Just val -> return val -- value found
+          Nothing -> panicAt pos "field not found in struct value" 
+      _ -> panicAt pos "attempted to access member of non-struct value" -- value found
 
 evalIfExpr :: AlexPosn -> TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
 evalIfExpr pos c t mElse = do

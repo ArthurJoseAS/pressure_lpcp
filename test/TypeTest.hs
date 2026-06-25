@@ -15,7 +15,8 @@ typeTests =
       testCase "checks unary expression types" testUnaryExprTypes,
       testCase "checks if and function expression types" testIfFnExprTypes,
       testCase "checks top-level types" testTopLevelTypes,
-      testCase "checks repl types" testReplTypes
+      testCase "checks repl types" testReplTypes,
+      testCase "checks struct types and member access" testStructTypes
     ]
 
 intType :: Type
@@ -126,3 +127,69 @@ replUnitAddition =
   ReplExpr $
     expr $
       ParsedBinaryExpr AddOp (expr (ParsedVarExpr (identFrom "x"))) (expr (ParsedIntLit 5))
+
+testStructTypes :: IO ()
+testStructTypes = do
+  -- 1. Correct struct parameter and member access type checks
+  assertOk "struct parameter and member access type checks" $
+    checkSource "f :: fn(p: struct { x: i32, y: bool }) -> i32 { p.x };"
+
+  -- 2. Duplicate field detection in struct definition
+  assertLeft "duplicate fields in struct definition rejected" $
+    checkSource "f :: fn(p: struct { x: i32, x: bool }) -> i32 { 0 };"
+
+  -- 3. Accessing non-existent field rejected
+  assertLeft "accessing non-existent field rejected" $
+    checkSource "f :: fn(p: struct { x: i32, y: bool }) -> i32 { p.z };"
+
+  -- 4. Accessing field on non-struct type rejected
+  assertLeft "accessing field on non-struct type rejected" $
+    checkSource "f :: fn(n: i32) -> i32 { n.x };"
+
+  -- 5. Anonymous struct initialization type checks
+  assertOk "anonymous struct initialization type checks" $
+    checkSource "x := .{ x = 1, y = true };"
+
+  -- 6. Named struct declaration and initialization type checks
+  assertOk "named struct declaration and initialization type checks" $
+    checkSource "MyStruct :: struct { x: i32, y: bool }; s := MyStruct { x = 1, y = true };"
+
+  -- 7. Duplicate field in anonymous struct initialization rejected
+  assertLeft "duplicate field in anonymous struct initialization rejected" $
+    checkSource "x := .{ x = 1, x = 2 };"
+
+  -- 8. Duplicate field in named struct initialization rejected
+  assertLeft "duplicate field in named struct initialization rejected" $
+    checkSource "MyStruct :: struct { x: i32 }; s := MyStruct { x = 1, x = 2 };"
+
+  -- 9. Type mismatch in named struct initialization rejected
+  assertLeft "type mismatch in named struct initialization rejected" $
+    checkSource "MyStruct :: struct { x: i32 }; s := MyStruct { x = true };"
+
+  -- 10. Unknown field in named struct initialization rejected
+  assertLeft "unknown field in named struct initialization rejected" $
+    checkSource "MyStruct :: struct { x: i32 }; s := MyStruct { y = 1 };"
+
+  -- 11. Initialization of undefined struct type rejected
+  assertLeft "initialization of undefined struct type rejected" $
+    checkSource "s := UnknownStruct { x = 1 };"
+
+  -- 12. Structural compatibility anonymous to named
+  assertOk "assigning structurally compatible anonymous struct to named struct variable" $
+    checkSource "MyStruct :: struct { x: i32, y: bool }; s : MyStruct = .{ x = 1, y = true };"
+
+  -- 13. Structural incompatibility anonymous to named rejected
+  assertLeft "assigning structurally incompatible anonymous struct to named struct variable" $
+    checkSource "MyStruct :: struct { x: i32, y: bool }; s : MyStruct = .{ x = 1, z = true };"
+
+  -- 14. Structural compatibility of anonymous structs
+  assertOk "structural compatibility of anonymous structs" $
+    checkSource "f :: fn(p: struct { x: i32, y: bool }) -> struct { x: i32, y: bool } { p };"
+
+  -- 15. Structural incompatibility of anonymous structs rejected
+  assertLeft "structural incompatibility of anonymous structs rejected" $
+    checkSource "f :: fn(p: struct { x: i32, y: bool }) -> struct { x: i32, z: bool } { p };"
+
+  -- 16. Member access type mismatch rejected
+  assertLeft "member access type mismatch rejected" $
+    checkSource "f :: fn(p: struct { x: i32, y: bool }) -> i32 { p.y };"

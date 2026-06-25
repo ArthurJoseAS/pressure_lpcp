@@ -90,12 +90,36 @@ runCheck = flip runStateT
 
 checkType :: TypeSyntax -> Check Type
 checkType (TypeSyntax pos k) = case k of
-  NameSyntax name -> liftEither $ Left $ UndefinedType pos name
+  -- Looks for the name in the environment
+  NameSyntax name -> do
+    env <- get
+    case lookupName name env of
+      Just (StructT fields, _) -> return $ StructT fields
+      _ -> liftEither $ Left $ UndefinedType pos name
   BoolSyntax -> return BoolT
   IntSyntax sign size -> return $ IntT sign size
   FloatSyntax size -> return $ FloatT size
   FnSyntax params ret -> FnT <$> mapM checkType params <*> checkType ret
   UnitSyntax -> return UnitT
+  StructSyntax structItems -> do
+    -- Aux recursive type check fields and enforce unicity
+    let checkFields acc [] = return (reverse acc)
+        checkFields acc (item : rest) = case item of
+          StructField (Ident fieldPos name) typeSyntax -> do
+            -- Checks if the accumulator list already has that name
+            -- NOTE : Linear search
+            if name `elem` map fst acc
+              then liftEither $ Left $ DuplicateDeclaration fieldPos name
+              else do
+                fieldType <- checkType typeSyntax
+                checkFields ((name, fieldType) : acc) rest
+          -- TODO : Implement struct members
+          StructMemberDecl _decl ->
+            checkFields acc rest
+    resolvedFields <- checkFields [] structItems
+    return $ StructT resolvedFields
+
+    
 
 -- Environment helpers
 
@@ -153,6 +177,59 @@ checkExprM (ParsedExpr pos k) = case k of
   ParsedIfExpr c t e -> checkIfExpr pos c t e
   ParsedFnExpr params ret body -> checkFnExpr pos params ret body
   ParsedCallExpr callee args -> checkCallExpr pos callee args
+  ParsedStructInit maybeName fields -> checkStructInit pos maybeName fields 
+  ParsedMemberAccess expr fieldIdent -> checkMemberAccess pos expr fieldIdent
+  ParsedTypeExpr _ -> error "Type expressions cannot be typechecked as value expressions"
+
+
+-- Aux function to find duplicate fields in struct init expressions
+checkDuplicateInitFields :: [ParsedAssign] -> Check ()
+checkDuplicateInitFields = go []
+  where
+    go _ [] = return ()
+    go seen (ParsedAssign (Ident pos name) _ : rest)
+      | name `elem` seen = liftEither $ Left $ DuplicateDeclaration pos name
+      | otherwise = go (name : seen) rest
+
+-- | Realiza a verificação de tipo de uma inicialização de struct.
+checkStructInit :: AlexPosn -> Maybe Ident -> [ParsedAssign] -> Check TypedExpr
+checkStructInit pos mName fields = do
+  checkDuplicateInitFields fields
+  case mName of
+    -- anonymous structs
+    Nothing -> do
+      typedFields <- mapM typecheckField fields
+      let structType = StructT (map (\(name, te) -> (name, typeOf te)) typedFields)
+      return $ TypedExpr pos structType (TypedStructInit Nothing typedFields)
+    -- named structs. Searches the environment for the struct definition
+    Just structIdent@(Ident structPos structName) -> do
+      env <- get
+      case lookupName structName env of
+        Just (StructT declaredFields, _) -> do -- success
+          typedFields <- mapM (typecheckNamedField declaredFields) fields
+          return $ TypedExpr pos (StructT declaredFields) (TypedStructInit (Just structIdent) typedFields)
+        Just (otherType, _) ->
+          liftEither $ Left $ TypeMismatch structPos (StructT []) otherType
+        Nothing ->
+          liftEither $ Left $ UndefinedType structPos structName
+  where
+    -- atributes a type to a field. Used in anonymous structs
+    typecheckField :: ParsedAssign -> Check (String, TypedExpr)
+    typecheckField (ParsedAssign (Ident _ name) expr) = do
+      te <- checkExprM expr
+      return (name, te)
+    -- types the field AND validates it with the struct's definiton
+    typecheckNamedField :: [(String, Type)] -> ParsedAssign -> Check (String, TypedExpr)
+    typecheckNamedField declaredFields (ParsedAssign (Ident fieldPos name) expr) =
+      case lookup name declaredFields of
+        Nothing ->
+          liftEither $ Left $ UndefinedVariable fieldPos name -- Campo não pertence à struct
+        Just expectedType -> do
+          te <- checkExprM expr
+          let inferredType = typeOf te
+          unless (compatible expectedType inferredType) $
+            liftEither $ Left $ TypeMismatch fieldPos expectedType inferredType
+          return (name, te)
 
 checkIfExpr :: AlexPosn -> ParsedExpr -> ParsedBlock -> Maybe ParsedBlock -> Check TypedExpr
 checkIfExpr pos c t mElse = do
@@ -217,6 +294,17 @@ checkCallExpr pos callee args = do
     checkArg (expected, actual) =
       unless (compatible expected (typeOf actual)) $ liftEither $ Left $ TypeMismatch pos expected (typeOf actual)
 
+-- checks the access to a struct's field (<id>.<id>)
+checkMemberAccess :: AlexPosn -> ParsedExpr -> Ident -> Check TypedExpr
+checkMemberAccess pos expr fieldIdent@(Ident fieldPos fieldName) = do
+  typedExpr <- checkExprM expr
+  case typeOf typedExpr of
+    StructT fields ->
+      case lookup fieldName fields of
+        Just fieldType -> return $ TypedExpr pos fieldType (TypedMemberAccess typedExpr fieldIdent)
+        Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
+    t -> liftEither $ Left $ TypeMismatch pos (StructT []) t
+
 checkBinaryExpr :: AlexPosn -> BinaryOp -> ParsedExpr -> ParsedExpr -> Check TypedExpr
 checkBinaryExpr pos op l r = do
   tl <- checkExprM l
@@ -262,6 +350,11 @@ compatible t1 t2 = case (t1, t2) of
   (BoolT, BoolT) -> True
   (UnitT, UnitT) -> True
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
+  -- NOTE : two struct must declare their fields in the same order according o this implementation
+  -- Consider using a map or sorting the lists before calling zipWith
+  (StructT fields1, StructT fields2) ->
+    length fields1 == length fields2 &&
+    and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') fields1 fields2)
   (_, _) -> False
 
 isNumeric :: Type -> Bool
@@ -302,6 +395,10 @@ checkFunctionItemStmt stmt = checkStmtM stmt
 checkDecl :: ParsedDecl -> Check TypedDecl
 checkDecl = \case
   ParsedValueDecl _ ident Nothing Nothing -> liftEither $ Left (MissingAnnotation (identPos ident))
+  ParsedValueDecl mut ident Nothing (Just (ParsedExpr _ (ParsedTypeExpr typeSyntax))) -> do
+    resolvedType <- checkType typeSyntax
+    bindIdent ident resolvedType mut
+    return $ TypedValueDecl mut ident resolvedType Nothing
   ParsedValueDecl mut ident Nothing (Just expr) -> do
     typedExpr <- checkExprM expr
     let inferred = typeOf typedExpr
@@ -311,6 +408,12 @@ checkDecl = \case
     t <- checkType ts
     bindIdent i t mut
     return $ TypedValueDecl mut i t Nothing
+  ParsedValueDecl mut i (Just ts) (Just (ParsedExpr _ (ParsedTypeExpr typeSyntax))) -> do
+    t <- checkType ts
+    resolvedType <- checkType typeSyntax
+    unless (compatible t resolvedType) $ liftEither $ Left $ TypeMismatch (identPos i) t resolvedType
+    bindIdent i resolvedType mut
+    return $ TypedValueDecl mut i resolvedType Nothing
   ParsedValueDecl mut i (Just ts) (Just e) -> do
     t <- checkType ts
     te <- checkExprM e
