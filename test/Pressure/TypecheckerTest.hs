@@ -81,7 +81,7 @@ testIfFnExprTypes = do
               (Block [] (Just (expr (ParsedIntLit 1))))
               ( Just
                   ( Block
-                      [] 
+                      []
                       ( Just
                           ( expr
                               ( ParsedIfExpr
