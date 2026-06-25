@@ -226,4 +226,3 @@ testStructTypes = do
         expr $
           ParsedBinaryExpr AddOp (expr (ParsedVarExpr (identFrom "x"))) (expr (ParsedIntLit 5))
     ]
->>>>>>> main:test/Pressure/TypecheckerTest.hs
