@@ -98,8 +98,8 @@ MyStruct :: struct {
 
     // Everything function were the first type is
     // a pointer to the struct or the struct type itself enables the dot syntax.
-    add :: fn(self: *MyStruct, other: MyStruct) -> i32 { ... }
-    sub :: fn(self: *mut MyStruct, other: MyStruct) -> i32 { ... }
+    add :: fn(self: *MyStruct, other: MyStruct) -> i32 { ... };
+    sub :: fn(self: *mut MyStruct, other: MyStruct) -> i32 { ... };
 }
 
 my_struct :: MyStruct { a = 42, b = 55, c = sub };

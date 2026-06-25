@@ -1,0 +1,81 @@
+\<Program> → \<TopLevels>
+
+\<TopLevels> → \<TopLevel> \<TopLevels> | ε
+
+\<TopLevel> → \<Stmt> | \<IfExpr>
+
+\<ReplInput> → \<Stmt> | \<ValueDecl> | \<AssignStmt> | \<Expr>
+
+\<Stmt> → \<AssignStmt> ; | \<ValueDecl> ; | \<Expr> ;
+
+\<AssignStmt> → \<id> = \<Expr> | \<id> += \<Expr> | \<id> -= \<Expr> | \<id> *= \<Expr> | \<id> /= \<Expr>
+
+\<ValueDecl> → \<id> : \<Type> | \<id> : \<OptType> = \<Expr> | \<id> : \<OptType> : \<Expr>
+
+\<Block> → { } | { \<BlockBody> }
+
+\<BlockBody> → \<Expr> | \<Stmt> | \<Stmt> \<BlockBody>
+
+\<StructType> → struct { \<StructItems> }
+
+\<StructItems> → \<StructItem> \<StructItems> | ε
+
+\<StructItem> → \<StructField> , | \<StructField> | \<ValueDecl> ;
+
+\<StructField> → \<id> : \<Type>
+
+\<StructInitExpr> →  \<StructRef> { \<StructInitItems> }
+
+\<StructRef> → . | \<id>
+
+\<StructInitItems> → \<StructInitItemList> | \<StructInitItemList> , | ε
+
+\<StructInitItemList> → \<StructInitItem> , \<StructInitItemList> | \<StructInitItem>
+
+\<StructInitItem> → \<id> = \<Expr>
+
+\<Expr> → \<IfExpr> | \<FnExpr> | \<LogicalOrExpr>
+
+\<IfExpr> → if \<Expr> \<Block> | if \<Expr> \<Block> else \<Block>
+
+\<FnExpr> → fn ( \<FnParams> ) -> \<Type> \<Block> | fn ( \<FnParams> ) \<Block>
+
+\<FnParams> → \<FnParamList> | ε
+
+\<FnParamList> → \<FnParam> | \<FnParam> , \<FnParamList>
+
+\<FnParam> → \<id> : \<Type>
+
+\<LogicalOrExpr> → \<LogicalOrExpr> or \<LogicalAndExpr> | \<LogicalAndExpr>
+
+\<LogicalAndExpr> → \<LogicalAndExpr> and \<ComparisonExpr> | \<ComparisonExpr>
+
+\<ComparisonExpr> → \<AddExpr> \<CompareOp> \<AddExpr> | \<AddExpr>
+
+\<CompareOp> → == | != | \< | \<= | > | >=
+
+\<AddExpr> → \<AddExpr> + \<MulExpr> | \<AddExpr> - \<MulExpr> | \<MulExpr>
+
+\<MulExpr> → \<MulExpr> * \<UnaryExpr> | \<MulExpr> / \<UnaryExpr> | \<UnaryExpr>
+
+\<UnaryExpr> → - \<UnaryExpr> | & \<UnaryExpr> | ! \<UnaryExpr> | \<CallExpr>
+
+\<CallExpr> → \<AtomExpr> | \<CallExpr> ( \<Args> )
+
+\<Args> → \<ArgList> | ε
+
+\<ArgList> → \<Expr> | \<Expr> , \<ArgList>
+
+\<AtomExpr> → \<int_literal> | \<float_literal> | true | false | ( \<Expr> ) | \<id> | \<StructInitExpr> | \<TypeLit> | \<FnType> | \<StructType> | \<AtomExpr> . \<id>
+
+\<OptType> → \<Type> | ε
+
+\<Type> → \<id> | \<FnType> | \<TypeLit> | \<StructType>
+
+\<FnType> → fn ( \<FnParamsTypes> ) -> \<Type>
+
+\<FnParamsTypes> → \<FnParamsTypesList> | ε
+
+\<FnParamsTypesList> → \<Type> | \<Type> , \<FnParamsTypesList>
+
+\<TypeLit> → unit | bool | int | uint | float | i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | f32 | f64
