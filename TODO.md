@@ -38,12 +38,12 @@
   x == 42; // <- should be true! But 42 has type i32 while uint has type u32.
   ```
 
-- [ ] Syntactic sugar for `else if`. - Victor
+- [x] Syntactic sugar for `else if`. - Victor
 
 ### Std
 
-- [ ] Implement print*.
-- [ ] Implement read*.
+- [x] Implement print*.
+- [x] Implement read*.
 - [ ] Implement alloc*.
 - [ ] Implement free*.
 
