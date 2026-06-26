@@ -4,6 +4,7 @@ import Control.Monad (foldM, unless, when)
 import Control.Monad.Except (liftEither)
 import Control.Monad.State (MonadState (..), StateT (runStateT), put)
 import Data.Functor (void)
+import Data.List (sortOn)
 import Data.Map qualified as Map
 import Data.Maybe (isJust, mapMaybe)
 import Pressure.Builtins (checkAsCall, checkPrintfCall, initialTypeEnv, isAs, isPrintf)
@@ -337,6 +338,7 @@ numericCompatible t1 t2 = case (t1, t2) of
   (FloatT k1, FloatT k2) -> k1 == k2
   _ -> False
 
+-- Checks type compatibility
 compatible :: Type -> Type -> Bool
 compatible t1 t2 = case (t1, t2) of
   (IntT s1 k1, IntT s2 k2) -> s1 == s2 && k1 == k2
@@ -348,11 +350,13 @@ compatible t1 t2 = case (t1, t2) of
   (AnyTypeT, _) -> True
   (_, AnyTypeT) -> True
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
-  -- NOTE : two struct must declare their fields in the same order according o this implementation
-  -- Consider using a map or sorting the lists before calling zipWith
+  -- NOTE : This is sorting the fields by their names so that the definiton order
+  -- is irrelevant. Consider using a Map.
   (StructT fields1, StructT fields2) ->
-    length fields1 == length fields2 &&
-    and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') fields1 fields2)
+    let sf1 = sortOn fst fields1
+        sf2 = sortOn fst fields2
+    in length sf1 == length sf2 &&
+       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
   (_, _) -> False
 
 isNumeric :: Type -> Bool

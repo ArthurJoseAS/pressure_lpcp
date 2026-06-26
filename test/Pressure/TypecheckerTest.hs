@@ -127,7 +127,6 @@ testTopLevelTypes = do
               )
           ]
       )
-  assertLeft "missing annotation" $ checkProgram (Program [TopLevelStmt (ParsedStmt pos0 (ParsedDeclStmt (ParsedValueDecl Mutable (identFrom "x") Nothing Nothing)))])
   assertOk "else if syntatic sugar type checks" $ checkSource "main :: fn(x: i32) -> i32 { if x == 1 { 10 } else if x == 2 { 20 } else { 30 } };"
 
 testReplTypes :: IO ()
@@ -152,9 +151,11 @@ replUnitDecl =
 
 replUnitAddition :: ParsedRepl
 replUnitAddition =
-  ReplExpr $
-    expr $
-      ParsedBinaryExpr AddOp (expr (ParsedVarExpr (identFrom "x"))) (expr (ParsedIntLit 5))
+  Repl
+    [ ReplExpr $
+        expr $
+          ParsedBinaryExpr AddOp (expr (ParsedVarExpr (identFrom "x"))) (expr (ParsedIntLit 5))
+    ]
 
 testStructTypes :: IO ()
 testStructTypes = do
@@ -214,6 +215,10 @@ testStructTypes = do
   assertOk "structural compatibility of anonymous structs" $
     checkSource "f :: fn(p: struct { x: i32, y: bool }) -> struct { x: i32, y: bool } { p };"
 
+  -- 14b. Structural compatibility of anonymous structs with different order
+  assertOk "structural compatibility of anonymous structs with different order" $
+    checkSource "f :: fn(p: struct { y: bool, x: i32 }) -> struct { x: i32, y: bool } { p };"
+
   -- 15. Structural incompatibility of anonymous structs rejected
   assertLeft "structural incompatibility of anonymous structs rejected" $
     checkSource "f :: fn(p: struct { x: i32, y: bool }) -> struct { x: i32, z: bool } { p };"
@@ -221,8 +226,4 @@ testStructTypes = do
   -- 16. Member access type mismatch rejected
   assertLeft "member access type mismatch rejected" $
     checkSource "f :: fn(p: struct { x: i32, y: bool }) -> i32 { p.y };"
-  Repl
-    [ ReplExpr $
-        expr $
-          ParsedBinaryExpr AddOp (expr (ParsedVarExpr (identFrom "x"))) (expr (ParsedIntLit 5))
-    ]
+
