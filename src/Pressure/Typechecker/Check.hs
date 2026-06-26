@@ -29,7 +29,7 @@ checkType (TypeSyntax pos k) = case k of
   NameSyntax name -> do
     env <- getEnv
     case lookupName name env of
-      Just (StructT fields, _) -> return $ StructT fields
+      Just (StructT fields members, _) -> return $ StructT fields members
       _ -> liftEither $ Left $ UndefinedType pos name
   BoolSyntax -> return BoolT
   UnitSyntax -> return UnitT
@@ -55,7 +55,7 @@ checkType (TypeSyntax pos k) = case k of
           StructMemberDecl _decl ->
             checkFields acc rest
     resolvedFields <- checkFields [] structItems
-    return $ StructT resolvedFields
+    return $ StructT resolvedFields []
   StringSyntax -> return StringT
 
 -- Program
@@ -152,17 +152,17 @@ checkStructInit pos mName fields = do
     -- anonymous structs
     Nothing -> do
       typedFields <- mapM typecheckField fields
-      let structType = StructT (map (\(name, te) -> (name, typeOf te)) typedFields)
+      let structType = StructT (map (\(name, te) -> (name, typeOf te)) typedFields) []
       return $ TypedExpr pos structType (TypedStructInit Nothing typedFields)
     -- named structs. Searches the environment for the struct definition
     Just structIdent@(Ident structPos structName) -> do
       env <- getEnv
       case lookupName structName env of
-        Just (StructT declaredFields, _) -> do -- success
+        Just (StructT declaredFields declaredMembers, _) -> do -- success
           typedFields <- mapM (typecheckNamedField declaredFields) fields
-          return $ TypedExpr pos (StructT declaredFields) (TypedStructInit (Just structIdent) typedFields)
+          return $ TypedExpr pos (StructT declaredFields declaredMembers) (TypedStructInit (Just structIdent) typedFields)
         Just (otherType, _) ->
-          liftEither $ Left $ TypeMismatch structPos (StructT []) otherType
+          liftEither $ Left $ TypeMismatch structPos (StructT [] []) otherType
         Nothing ->
           liftEither $ Left $ UndefinedType structPos structName
   where
@@ -294,11 +294,11 @@ checkMemberAccess :: AlexPosn -> ParsedExpr -> Ident -> Check TypedExpr
 checkMemberAccess pos expr fieldIdent@(Ident fieldPos fieldName) = do
   typedExpr <- checkExprM expr
   case typeOf typedExpr of
-    StructT fields ->
+    StructT fields _ ->
       case lookup fieldName fields of
         Just fieldType -> return $ TypedExpr pos fieldType (TypedMemberAccess typedExpr fieldIdent)
         Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
-    t -> liftEither $ Left $ TypeMismatch pos (StructT []) t
+    t -> liftEither $ Left $ TypeMismatch pos (StructT [] []) t
 
 checkBinaryExpr :: AlexPosn -> BinaryOp -> ParsedExpr -> ParsedExpr -> Check TypedExpr
 checkBinaryExpr pos op l r = do
@@ -351,12 +351,16 @@ compatible t1 t2 = case (t1, t2) of
   (_, AnyTypeT) -> True
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
   -- NOTE : This is sorting the fields by their names so that the definiton order
-  -- is irrelevant. Consider using a Map.
-  (StructT fields1, StructT fields2) ->
+  -- is irrelevant. Consider using a 
+  (StructT fields1 members1, StructT fields2 members2) ->
     let sf1 = sortOn fst fields1
         sf2 = sortOn fst fields2
+        sm1 = sortOn fst members1
+        sm2 = sortOn fst members2
     in length sf1 == length sf2 &&
-       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
+       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2) &&
+       length sm1 == length sm2 &&
+       and (zipWith (\(n1, (t1', m1)) (n2, (t2', m2)) -> n1 == n2 && m1 == m2 && compatible t1' t2') sm1 sm2)
   (_, _) -> False
 
 isNumeric :: Type -> Bool

@@ -31,8 +31,8 @@ defaultValue = \case
   BoolT -> VBool False
   FnT _ _ -> VEmpty
   UnitT -> VUnit
-  -- Recursively calls defaultValue for each field
-  StructT fields -> VStruct (map (\(name, fieldType) -> (name , defaultValue fieldType)) fields)
+  -- Recursively calls defaultValue for each field. Ignores constants
+  StructT fields _ -> VStruct (map (\(name, fieldType) -> (name , defaultValue fieldType)) fields)
 
 withNumbers :: AlexPosn -> (RuntimeNumber -> RuntimeNumber -> m Value) -> Value -> Value -> m Value
 withNumbers pos f va vb =
