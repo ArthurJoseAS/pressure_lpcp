@@ -1,4 +1,4 @@
-module Pressure.Language.Ast.LiteralTest
+module Pressure.Interpreter.LiteralTest
   ( literalTests,
   )
 where
@@ -23,7 +23,6 @@ literalTests =
 
 testIntLit :: IO ()
 testIntLit = do
-  checkOk "int literal" "x: int = 42;"
   withTokens "int literal eval" "x: int = 42;" $ \ast -> do
     result <- evalParsed "int literal eval" ast
     case result of
@@ -36,7 +35,6 @@ testIntLit = do
 
 testFloatLit :: IO ()
 testFloatLit = do
-  checkOk "float literal" "x: float = 3.14;"
   withTokens "float literal eval" "x: float = 3.14;" $ \ast -> do
     result <- evalParsed "float literal eval" ast
     case result of
@@ -48,7 +46,6 @@ testFloatLit = do
 
 testBoolLit :: IO ()
 testBoolLit = do
-  checkOk "bool literal" "x: bool = true;"
   withTokens "bool literal eval" "x: bool = true;" $ \ast -> do
     result <- evalParsed "bool literal eval" ast
     case result of
@@ -57,6 +54,17 @@ testBoolLit = do
         case lookupValue "x" env of
           Just (VBool True) -> return ()
           other -> error $ "expected true, got " ++ show other
+
+testStringLit :: IO ()
+testStringLit = do
+  withTokens "string literal eval" "x: string = \"hello\";" $ \ast -> do
+    result <- evalParsed "string literal eval" ast
+    case result of
+      Left err -> error $ "string literal eval failed: " ++ show err
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VString "hello") -> return ()
+          other -> error $ "expected \"hello\", got " ++ show other
 
 testVarDeclAndLookup :: IO ()
 testVarDeclAndLookup = do
@@ -67,15 +75,3 @@ testVarDeclAndLookup = do
       Right (_, env) ->
         assertExpr "x after decl" (TypedExpr pos0 UnitT (TypedVarExpr (identFrom "x"))) env (VInt Signed I32 42)
       Left err -> error $ "eval failed: " ++ show err
-
-testStringLit :: IO ()
-testStringLit = do
-  checkOk "string literal" "x: string = \"hello\";"
-  withTokens "string literal eval" "x: string = \"hello\";" $ \ast -> do
-    result <- evalParsed "string literal eval" ast
-    case result of
-      Left err -> error $ "string literal eval failed: " ++ show err
-      Right (_, env) ->
-        case lookupValue "x" env of
-          Just (VString "hello") -> return ()
-          other -> error $ "expected \"hello\", got " ++ show other

@@ -1,4 +1,4 @@
-module Pressure.Language.Ast.FunctionTest
+module Pressure.Interpreter.FunctionTest
   ( functionTests,
   )
 where
@@ -22,15 +22,12 @@ functionTests =
     "functions"
     [ testCase "evaluates unit function sugar" testUnitFunctionSugar,
       testCase "evaluates functions" testFunctionEval,
-      testCase "rejects same-block closure capture" testClosureCapturesByValue,
       testCase "keeps function scope local" testFunctionLocalScope,
       testCase "evaluates direct recursion" testDirectRecursion,
       testCase "evaluates top-level mutual recursion" testTopLevelMutualRecursion,
-      testCase "accepts local mutual recursion" testLocalMutualRecursion,
       testCase "evaluates forward function references" testForwardFunctionReference,
       testCase "evaluates function global access" testFunctionUsesGlobal,
-      testCase "evaluates repl recursive functions" testReplRecursiveFunction,
-      testCase "accepts nested function capture" testNestedFunctionCapture
+      testCase "evaluates repl recursive functions" testReplRecursiveFunction
     ]
 
 testUnitFunctionSugar :: IO ()
@@ -54,10 +51,6 @@ testFunctionEval = do
           Just (VInt Signed I32 3) -> return ()
           other -> error $ "expected result = 3, got " ++ show other
       Left err -> error $ "eval failed: " ++ show err
-
-testClosureCapturesByValue :: IO ()
-testClosureCapturesByValue = do
-  checkErr "closure does not capture same-block variable" "x :: 10; addX :: fn(y: i32) -> i32 { x + y }; x :: 20; result: i32 = addX(5);"
 
 testFunctionLocalScope :: IO ()
 testFunctionLocalScope = do
@@ -94,10 +87,6 @@ testTopLevelMutualRecursion = do
           Just (VBool True) -> return ()
           other -> error $ "expected result = true, got " ++ show other
       Left err -> error $ "eval failed: " ++ show err
-
-testLocalMutualRecursion :: IO ()
-testLocalMutualRecursion = do
-  checkOk "local mutual recursion" "outer :: fn(n: i32) -> bool { even :: fn(x: i32) -> bool { if x == 0 { true } else { odd(x - 1) } }; odd :: fn(x: i32) -> bool { if x == 0 { false } else { even(x - 1) } }; even(n) }; result: bool = outer(9);"
 
 testForwardFunctionReference :: IO ()
 testForwardFunctionReference = do
@@ -141,7 +130,3 @@ testReplRecursiveFunction = do
                 Right (val, _) -> error $ "expected succ(3) = 4, got " ++ show val
                 Left err -> error $ "repl recursive call eval failed: " ++ show err
             Right (Repl other, _) -> error $ "expected single expression, got " ++ show (length other) ++ " inputs"
-
-testNestedFunctionCapture :: IO ()
-testNestedFunctionCapture = do
-  checkOk "nested function capture" "outer :: fn(x: i32) -> i32 { helper :: fn(n: i32) -> i32 { if n == 0 { x } else { helper(n - 1) } }; helper(3) }; result: i32 = outer(7);"

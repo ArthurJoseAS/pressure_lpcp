@@ -123,19 +123,27 @@ test-suite pressure-lang-test
   main-is:          Main.hs
   other-modules:
     Pressure.BuiltinsTest
-    Pressure.Language.Ast.ArithTest
-    Pressure.Language.Ast.AssignTest
-    Pressure.Language.Ast.ControlTest
-    Pressure.Language.Ast.ErrorTest
-    Pressure.Language.Ast.FunctionTest
-    Pressure.Language.Ast.LiteralTest
-    Pressure.Language.AstTest
+    Pressure.Interpreter.ArithTest
+    Pressure.Interpreter.AssignTest
+    Pressure.Interpreter.ControlTest
+    Pressure.Interpreter.ErrorTest
+    Pressure.Interpreter.FunctionTest
+    Pressure.Interpreter.LiteralTest
+    Pressure.InterpreterTest
     Pressure.Language.LexerTest
     Pressure.Language.Parser.ErrorTest
+    Pressure.Language.Parser.ExpressionsTest
     Pressure.Language.Parser.ProgramTest
     Pressure.Language.Parser.ReplTest
+    Pressure.Language.Parser.TestUtil
     Pressure.Language.ParserTest
     Pressure.TestUtil
+    Pressure.Typechecker.ArithTest
+    Pressure.Typechecker.AssignTest
+    Pressure.Typechecker.ControlTest
+    Pressure.Typechecker.ErrorTest
+    Pressure.Typechecker.FunctionTest
+    Pressure.Typechecker.LiteralTest
     Pressure.TypecheckerTest
 
   build-depends:
