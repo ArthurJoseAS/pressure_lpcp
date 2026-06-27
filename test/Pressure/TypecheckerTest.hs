@@ -1,20 +1,36 @@
 module Pressure.TypecheckerTest (typeTests) where
 
+import Data.Functor (void)
 import Pressure.Language.Ast
 import Pressure.Language.Lexer (runAlex)
 import Pressure.Language.Parser (parseProgram)
+
 import Pressure.Language.Types
 import Pressure.TestUtil (assertEqual, assertLeft, assertOk, identFrom, pos0)
-import Pressure.Typechecker (Error, checkProgram, checkRepl, checkReplWithEnv)
-import Pressure.Typechecker.Check (checkExpr)
+import Pressure.Typechecker (checkProgram, checkRepl)
+import Pressure.Typechecker.Check (checkExpr, checkReplWithEnv)
+import Pressure.Typechecker.Error (Error)
+import Pressure.Typechecker.ArithTest (arithTypeTests)
+import Pressure.Typechecker.AssignTest (assignTypeTests)
+import Pressure.Typechecker.ControlTest (controlTypeTests)
+import Pressure.Typechecker.ErrorTest (errorTypeTests)
+import Pressure.Typechecker.FunctionTest (functionTypeTests)
+import Pressure.Typechecker.LiteralTest (literalTypeTests)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
+
 
 typeTests :: TestTree
 typeTests =
   testGroup
     "types"
-    [ testCase "checks binary expression types" testBinaryExprTypes,
+    [ literalTypeTests,
+      arithTypeTests,
+      assignTypeTests,
+      errorTypeTests,
+      controlTypeTests,
+      functionTypeTests,
+      testCase "checks binary expression types" testBinaryExprTypes,
       testCase "checks unary expression types" testUnaryExprTypes,
       testCase "checks if and function expression types" testIfFnExprTypes,
       testCase "checks top-level types" testTopLevelTypes,
@@ -41,9 +57,13 @@ checkExprType :: ParsedExpr -> Either Error Type
 checkExprType = fmap typedExprType . checkExpr
 
 checkSource :: String -> Either Error ()
-checkSource source = case runAlex source parseProgram of
+checkSource source = case runAlex fullSource parseProgram of
   Left err -> error $ "parse failed: " ++ err
-  Right ast -> checkProgram ast
+  Right ast -> void (checkProgram ast)
+  where
+    fullSource = if "main" `elem` words (map (\c -> if c `elem` "():;,{}" then ' ' else c) source)
+                   then source
+                   else source ++ " main :: fn() {};"
 
 testBinaryExprTypes :: IO ()
 testBinaryExprTypes = do
@@ -127,7 +147,7 @@ testTopLevelTypes = do
               )
           ]
       )
-  assertOk "else if syntatic sugar type checks" $ checkSource "main :: fn(x: i32) -> i32 { if x == 1 { 10 } else if x == 2 { 20 } else { 30 } };"
+  assertOk "else if syntatic sugar type checks" $ checkSource "foo :: fn(x: i32) -> i32 { if x == 1 { 10 } else if x == 2 { 20 } else { 30 } };"
 
 testReplTypes :: IO ()
 testReplTypes = do

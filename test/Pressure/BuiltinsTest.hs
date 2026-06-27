@@ -2,6 +2,7 @@ module Pressure.BuiltinsTest (builtinsTests) where
 
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State (runStateT)
+import Pressure.Interpreter.Error qualified as Eval
 import Pressure.Interpreter.Eval qualified as Eval
 import Pressure.Interpreter.Value (Value (..))
 import Pressure.Language.Lexer (runAlex)
@@ -45,7 +46,7 @@ builtinsTests =
       testCase "anytype annotation resolves to inferred type" testAnyTypeAnnotation
     ]
 
-runStdlibEval :: String -> IO (Either Eval.Error Value)
+runStdlibEval :: String -> IO (Either Eval.EvalError Value)
 runStdlibEval source = do
   ast <- case runAlex source parseRepl of
     Left err -> error $ "parse failed: " ++ err

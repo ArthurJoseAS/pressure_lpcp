@@ -1,3 +1,3 @@
-module Pressure (repl, run) where
+module Pressure (repl) where
 
-import Pressure.Interpreter (repl, run)
+import Pressure.Interpreter (repl)

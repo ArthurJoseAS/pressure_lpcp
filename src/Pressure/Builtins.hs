@@ -4,15 +4,15 @@ import Control.Monad (unless, zipWithM_)
 import Control.Monad.Except (MonadError (throwError), liftEither)
 import Control.Monad.IO.Class (liftIO)
 import Data.Map.Strict qualified as Map
-import Text.Read (readMaybe)
 import Pressure.Interpreter.Env (Eval)
-import Pressure.Interpreter.Error (Error (..), RuntimeError (..), panicAt)
+import Pressure.Interpreter.Error (EvalError (RuntimeError), RuntimeError (..), panicAt)
 import Pressure.Interpreter.Value (Value (..), ValueEnv)
 import Pressure.Language.Ast (Ident (..), TypedExpr (..), TypedExprKind (..))
 import Pressure.Language.Lexer (AlexPosn)
 import Pressure.Language.Types
 import Pressure.Typechecker.Env (Check, TypeEnv)
 import Pressure.Typechecker.Error (Error (..))
+import Text.Read (readMaybe)
 
 initialValueEnv :: ValueEnv
 initialValueEnv =
@@ -124,7 +124,9 @@ checkAsCall pos callee args = case args of
     case typedExprKind targetTypeExpr of
       TypedTypeLit targetType -> do
         unless (targetType /= AnyTypeT) $
-          liftEither $ Left $ InvalidCast pos AnyTypeT (typedExprType valueExpr)
+          liftEither $
+            Left $
+              InvalidCast pos AnyTypeT (typedExprType valueExpr)
         let valueType = typedExprType valueExpr
         unless (isCastable targetType valueType) $
           liftEither $

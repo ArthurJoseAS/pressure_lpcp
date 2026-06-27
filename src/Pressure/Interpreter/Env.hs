@@ -11,7 +11,7 @@ import Pressure.Language.Types
 
 type Env = [Map String Value]
 
-type Eval a = StateT Env (ExceptT Error IO) a
+type Eval a = StateT Env (ExceptT EvalError IO) a
 
 data RuntimeNumber
   = RuntimeInt Sign IntSize Integer

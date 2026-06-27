@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Pressure.BuiltinsTest (builtinsTests)
-import Pressure.Language.AstTest (astTests)
+import Pressure.InterpreterTest (interpreterTests)
 import Pressure.Language.LexerTest (lexerTests)
 import Pressure.Language.ParserTest (parserTests)
 import Pressure.TypecheckerTest (typeTests)
@@ -15,6 +15,6 @@ main =
       [ lexerTests,
         parserTests,
         typeTests,
-        astTests,
+        interpreterTests,
         builtinsTests
       ]

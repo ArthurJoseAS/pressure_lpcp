@@ -1,7 +1,7 @@
 module Pressure.Typechecker.Check where
 
 import Control.Monad (foldM, unless, when)
-import Control.Monad.Except (liftEither)
+import Control.Monad.Except (MonadError (throwError), liftEither)
 import Control.Monad.State (MonadState (..), StateT (runStateT), put)
 import Data.Functor (void)
 import Data.List (sortOn)
@@ -67,7 +67,6 @@ checkStructMembers mStructNameInfo fields items = checkMembers [] [ decl | Struc
       when (memberName `elem` map fst fields || memberName `elem` map fst acc) $
         liftEither $ Left $ DuplicateDeclaration (identPos memberIdent) memberName
       
-      -- TODO : figure out how to 'publish' a constant
       -- stacks new scope and saves member in it (binds the value to the namespace)
       TypedValueDecl _ _ memberType _ <- withScope $ do
         case mStructNameInfo of
@@ -87,24 +86,31 @@ checkStructMembers mStructNameInfo fields items = checkMembers [] [ decl | Struc
 
 -- Program
 
-checkProgram :: ParsedProgram -> Either Error ()
-checkProgram = void . checkProgramTyped
+checkProgram :: ParsedProgram -> Either Error TypedProgram
+checkProgram = fmap fst . checkProgramWithEnv initialTypeEnv
 
-checkProgramTyped :: ParsedProgram -> Either Error TypedProgram
-checkProgramTyped (Program toplevels) =
-  fst
-    <$> runCheck
-      initialTypeEnv
-      ( do
-          let stmts = map topLevelStmt toplevels
-          -- checks types beforea functions, so they can be used in their definitions.
-          installStructs stmts 
-          installFunctionItems stmts
-          typedTopLevels <- mapM checkTopLevel toplevels
-          return $ Program typedTopLevels
-      )
+checkProgramWithEnv :: TypeEnv -> ParsedProgram -> Either Error (TypedProgram, TypeEnv)
+checkProgramWithEnv env (Program toplevels) =
+  runCheck env $ do
+    let smts = map topLevelStmt toplevels
+    installStructs smts  
+    let fns = functionItems smts
+    installFunctionItems fns
+    validateMain fns
+    typedTopLevels <- mapM checkTopLevel toplevels
+    return $ Program typedTopLevels
   where
     topLevelStmt (TopLevelStmt stmt) = stmt
+
+    validateMain [] = throwError MissingMain
+    validateMain ((FunctionItem (Ident pos name) params ts) : fs)
+      | name == "main" = validMainSignature pos params ts
+      | otherwise = validateMain fs
+
+    validMainSignature _ [] (TypeSyntax _ UnitSyntax) = pure ()
+    validMainSignature pos params ts@(TypeSyntax _ _) = do
+      (typedParams, typedRet) <- checkFnSig params ts
+      throwError $ InvalidMain pos (FnT (map (\(TypedParam _ t) -> t) typedParams) typedRet)
 
 checkTopLevel :: ParsedTopLevel -> Check TypedTopLevel
 checkTopLevel (TopLevelStmt stmt)
@@ -201,12 +207,12 @@ checkStructInit pos mName fields = do
     typecheckField (ParsedAssign (Ident _ name) expr) = do
       te <- checkExprM expr
       return (name, te)
-    -- types the field AND validates it with the struct's definiton
+    -- types the field AND validates it with the struct's definiton.
     typecheckNamedField :: [(String, Type)] -> ParsedAssign -> Check (String, TypedExpr)
     typecheckNamedField declaredFields (ParsedAssign (Ident fieldPos name) expr) =
       case lookup name declaredFields of
         Nothing ->
-          liftEither $ Left $ UndefinedVariable fieldPos name -- Campo não pertence à struct
+          liftEither $ Left $ UndefinedVariable fieldPos name
         Just expectedType -> do
           te <- checkExprM expr
           let inferredType = typeOf te
@@ -277,9 +283,7 @@ checkUnaryExpr pos op e = do
 
 checkFnExpr :: AlexPosn -> [Param] -> TypeSyntax -> ParsedBlock -> Check TypedExpr
 checkFnExpr pos params ret body = do
-  checkDuplicateParams params
-  typedRet <- checkType ret
-  typedParams <- mapM checkParam params
+  (typedParams, typedRet) <- checkFnSig params ret
   outerState <- get
   let env = fst outerState
   put (pushScope env, [])
@@ -291,6 +295,13 @@ checkFnExpr pos params ret body = do
   where
     tymismatch r b = Left $ TypeMismatch pos r (blockType b)
     tyexpr ts ps r b = TypedExpr pos (FnT ts r) (TypedFnExpr ps r b)
+
+checkFnSig :: [Param] -> TypeSyntax -> Check ([TypedParam], Type)
+checkFnSig params ret = do
+  checkDuplicateParams params
+  typedRet <- checkType ret
+  typedParams <- mapM checkParam params
+  return (typedParams, typedRet)
 
 checkDuplicateParams :: [Param] -> Check ()
 checkDuplicateParams = go Map.empty
@@ -385,6 +396,7 @@ compatible t1 t2 = case (t1, t2) of
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
   -- NOTE : This is sorting the fields by their ids so that the definition order doesnt hinder the type checking.
   -- using some form of dictionary solves this
+  -- NOTE : This doesnt take members into account for type compatibility, considering they're "constants in the struct's namespace", according to SPEC.md
   (StructT fields1 _, StructT fields2 _) ->
     let sf1 = sortOn fst fields1
         sf2 = sortOn fst fields2
@@ -512,14 +524,13 @@ typedParamType (TypedParam _ typ) = typ
 
 -- Function items
 
-functionItem :: ParsedStmt -> Maybe ParsedStmt
-functionItem i = case i of
-  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant _ _ (ParsedExpr _ (ParsedFnExpr {})))) -> Just i
+functionItem :: ParsedStmt -> Maybe FunctionItem
+functionItem = \case
+  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant i _ (ParsedExpr _ (ParsedFnExpr params ts _)))) -> Just $ FunctionItem i params ts
   _ -> Nothing
 
-installFunctionItems :: [ParsedStmt] -> Check ()
-installFunctionItems stmts = do
-  let fns = functionItems stmts
+installFunctionItems :: [FunctionItem] -> Check ()
+installFunctionItems fns = do
   checkDuplicateFunctions (fnItemsPos fns) (map (identName . fnItemIdent) fns)
   typedFns <- mapM typeFunctionItem fns
   unless (null fns) $ modifyEnv pushScope
@@ -591,7 +602,7 @@ checkBlockM :: ParsedBlock -> Check TypedBlock
 checkBlockM (Block stmts expr) = do
   outerEnv <- getEnv
   installStructs stmts
-  installFunctionItems stmts
+  installFunctionItems (functionItems stmts)
   fnScope <- getEnv
   typedStmts <- mapM (checkStmtInBlock fnScope) stmts
   typedExpr <- traverse checkExprM expr

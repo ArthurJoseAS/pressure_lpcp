@@ -23,34 +23,39 @@ data Error
   | NonUnitLoopBody AlexPosn Type
   | InvalidPrintf AlexPosn String
   | InvalidCast AlexPosn Type Type
+  | MissingMain
+  | InvalidMain AlexPosn Type
   deriving (Show, Eq)
 
-errorPos :: Error -> AlexPosn
+errorPos :: Error -> Maybe AlexPosn
 errorPos = \case
-  TypeMismatch pos _ _ -> pos
-  UnsupportedOp pos _ _ _ -> pos
-  UnsupportedUnaryOp pos _ _ -> pos
-  DuplicateParams pos _ -> pos
-  DuplicateFunction pos _ -> pos
-  DuplicateDeclaration pos _ -> pos
-  UndefinedVariable pos _ -> pos
-  UndefinedType pos _ -> pos
-  MutableType pos _ -> pos
-  NotCallable pos _ -> pos
-  ArityMismatch pos _ _ -> pos
-  AssignToConstant pos _ -> pos
-  MissingLoopElse pos -> pos
-  ElseWithoutBreak pos -> pos
-  BreakOutsideLoop pos -> pos
-  ContinueOutsideLoop pos -> pos
-  NonUnitLoopBody pos _ -> pos
-  InvalidPrintf pos _ -> pos
-  InvalidCast pos _ _ -> pos
+  TypeMismatch pos _ _ -> Just pos
+  UnsupportedOp pos _ _ _ -> Just pos
+  UnsupportedUnaryOp pos _ _ -> Just pos
+  DuplicateParams pos _ -> Just pos
+  DuplicateFunction pos _ -> Just pos
+  DuplicateDeclaration pos _ -> Just pos
+  UndefinedVariable pos _ -> Just pos
+  UndefinedType pos _ -> Just pos
+  MutableType pos _ -> Just pos
+  NotCallable pos _ -> Just pos
+  ArityMismatch pos _ _ -> Just pos
+  AssignToConstant pos _ -> Just pos
+  MissingLoopElse pos -> Just pos
+  ElseWithoutBreak pos -> Just pos
+  BreakOutsideLoop pos -> Just pos
+  ContinueOutsideLoop pos -> Just pos
+  NonUnitLoopBody pos _ -> Just pos
+  InvalidPrintf pos _ -> Just pos
+  InvalidCast pos _ _ -> Just pos
+  MissingMain -> Nothing
+  InvalidMain pos _ -> Just pos
 
-errorInfo :: Error -> (AlexPosn, String)
+errorInfo :: Error -> (Maybe AlexPosn, String)
 errorInfo err =
   ( errorPos err,
     case err of
+      MissingMain -> "missing main function in the top level declarations"
       TypeMismatch _ expected actual -> "type mismatch: expected '" ++ prettyType expected ++ "', found '" ++ prettyType actual ++ "'"
       UnsupportedOp _ op t1 t2 -> "cannot use operator '" ++ prettyBinaryOp op ++ "' on type '" ++ prettyType t1 ++ "' and '" ++ prettyType t2 ++ "'"
       UnsupportedUnaryOp _ op t -> "cannot use unary operator '" ++ prettyUnaryOp op ++ "' on type '" ++ prettyType t ++ "'"
@@ -70,4 +75,5 @@ errorInfo err =
       NonUnitLoopBody _ t -> "loop body must have type '()', found '" ++ prettyType t ++ "'"
       InvalidPrintf _ msg -> "@printf: " ++ msg
       InvalidCast _ target actual -> "invalid cast to '" ++ prettyType target ++ "' from '" ++ prettyType actual ++ "'"
+      InvalidMain _ t -> "expected main function with type '" ++ prettyType (FnT [] UnitT) ++ "' found '" ++ prettyType t ++ "'"
   )

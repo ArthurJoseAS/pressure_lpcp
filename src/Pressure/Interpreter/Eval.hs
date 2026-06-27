@@ -1,6 +1,5 @@
 module Pressure.Interpreter.Eval
-  ( Error (..),
-    RuntimeError (..),
+  ( RuntimeError (..),
     Eval,
     evalExpr,
     evalStmt,
@@ -229,14 +228,14 @@ installFunctionItems stmts = do
   env <- get
   let extendedEnv = foldl addFn env fns
         where
-          addFn env' (name, params, ret, body) =
+          addFn env' (_, name, params, ret, body) =
             let closure = VFunction params ret body extendedEnv
              in bindInCurrentScope name closure env'
   put extendedEnv
 
-functionItem :: TypedStmt -> Maybe (String, [TypedParam], Type, TypedBlock)
+functionItem :: TypedStmt -> Maybe (AlexPosn, String, [TypedParam], Type, TypedBlock)
 functionItem = \case
-  TypedStmt _ (TypedDeclStmt (TypedValueDecl Constant (Ident _ name) _ (TypedExpr _ _ (TypedFnExpr params ret body)))) -> Just (name, params, ret, body)
+  TypedStmt pos (TypedDeclStmt (TypedValueDecl Constant (Ident _ name) _ (TypedExpr _ _ (TypedFnExpr params ret body)))) -> Just (pos, name, params, ret, body)
   _ -> Nothing
 
 -- TODO: Grrrr, remove this duplication
@@ -261,6 +260,10 @@ evalProgram (Program toplevels) = do
   let stmts = map topLevelStmt toplevels
   installFunctionItems stmts
   mapM_ evalStmt stmts
+  env <- get
+  _ <- case lookupName "main" env of
+    Nothing -> panic "missing main in evaluator"
+    Just f -> callValue (AlexPn 0 0 0) f [] -- FIXME: Use the correct position of main.
   return VUnit
   where
     topLevelStmt (TopLevelStmt stmt) = stmt

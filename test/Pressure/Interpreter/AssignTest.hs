@@ -1,4 +1,4 @@
-module Pressure.Language.Ast.AssignTest
+module Pressure.Interpreter.AssignTest
   ( assignTests,
   )
 where
@@ -16,9 +16,6 @@ assignTests =
     [ testCase "mutates mutable variables" testMutableAssign,
       testCase "handles multiple assignments" testMultipleAssign,
       testCase "assigns in nested block" testAssignInBlock,
-      testCase "rejects assignment to constants" testAssignToConstant,
-      testCase "rejects assignment to undefined" testAssignToUndefined,
-      testCase "rejects assignment type mismatch" testAssignTypeMismatch,
       testCase "assigns with expression" testAssignWithExpr,
       testCase "compound add" testCompoundAdd,
       testCase "compound subtract" testCompoundSub,
@@ -59,15 +56,6 @@ testAssignInBlock =
           Just (VInt Signed I32 2) -> return ()
           other -> error $ "expected x = 2, got " ++ show other
       Left err -> error $ "eval failed: " ++ show err
-
-testAssignToConstant :: IO ()
-testAssignToConstant = checkErr "assign to constant" "x :: 42; x = 10;"
-
-testAssignToUndefined :: IO ()
-testAssignToUndefined = checkErr "assign to undefined" "x = 10;"
-
-testAssignTypeMismatch :: IO ()
-testAssignTypeMismatch = checkErr "assign type mismatch" "x: bool = true; x = 42;"
 
 testAssignWithExpr :: IO ()
 testAssignWithExpr =
