@@ -4,31 +4,31 @@ rationalize :: fn(a : i32, b : i32) -> struct {num : i32, den : i32} {
     rational_t {num=a, den=b}
 };
 
-rational_sum :: fn(a : struct {num : i32, den : i32}, b : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_sum :: fn(a :  rational_t, b :  rational_t) ->  rational_t {
     rational_t {num = a.num * b.den + a.den * b.num, den = a.den * b.den}
 };
 
-rational_neg :: fn(a : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_neg :: fn(a :  rational_t) ->  rational_t {
     rational_t {num = -a.num, den = a.den}
 };
 
-rational_sub :: fn(a : struct {num : i32, den : i32}, b : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_sub :: fn(a :  rational_t, b :  rational_t) ->  rational_t {
     rational_t {num = a.num * b.den - a.den * b.num, den = a.den * b.den}
 };
 
-rational_mul :: fn(a : struct {num : i32, den : i32}, b : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_mul :: fn(a :  rational_t, b :  rational_t) ->  rational_t {
     rational_t {num = a.num * b.num, den = a.den * b.den}
 };
 
-rational_inv :: fn(a : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_inv :: fn(a :  rational_t) ->  rational_t {
     rational_t {num = a.den, den = a.num}
 };
 
-rational_div :: fn(a : struct {num : i32, den : i32}, b : struct {num : i32, den : i32}) -> struct {num : i32, den : i32} {
+rational_div :: fn(a :  rational_t, b :  rational_t) ->  rational_t {
     rational_t {num = a.num * b.den, den = a.den * b.num}
 };
 
-rational_equals :: fn(a : struct {num : i32, den : i32}, b : struct {num : i32, den : i32}) -> bool {
+rational_equals :: fn(a :  rational_t, b :  rational_t) -> bool {
      (a.num * b.den) == (a.den * b.num)
 };
 
