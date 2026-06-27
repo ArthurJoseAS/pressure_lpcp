@@ -1,6 +1,12 @@
-rational_t :: struct {num : i32, den : i32};
+rational_t :: struct {
+    num : i32,
+    den : i32,
+    eq :: fn (this : rational_t, r : rational_t) -> bool {
+        (this.num * r.den) == (this.den * r.num)
+    } ;
+};
 
-rationalize :: fn(a : i32, b : i32) -> struct {num : i32, den : i32} {
+rationalize :: fn(a : i32, b : i32) -> rational_t {
     rational_t {num=a, den=b}
 };
 
@@ -43,7 +49,7 @@ main :: fn() {
 
     @printf("r1: {}/{}\n", r1.num, r1.den);
     @printf("r2: {}/{}\n", r2.num, r2.den);
-    @printf("r1 == r2: {}\n", rational_equals(r1, r2));
+    @printf("r1 == r2: {}\n", rational_t.eq(r1, r2));
 
     r_sum := rational_sum(r1, r2);
     @printf("r1 + r2 = {}/{}\n", r_sum.num, r_sum.den);
@@ -63,3 +69,5 @@ main :: fn() {
     r_div := rational_div(r1, r2);
     @printf("r1 / r2 = {}/{}\n", r_div.num, r_div.den);
 };
+
+main();
