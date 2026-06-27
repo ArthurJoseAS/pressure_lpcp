@@ -44,10 +44,11 @@ checkType (TypeSyntax pos k) = case k of
     members <- checkStructMembers Nothing fields structItems
     return $ StructT fields members
   StringSyntax -> return StringT
+  ArraySyntax t -> (ArrT <$> (checkType t))
 
 checkStructFields :: [StructItem] -> Check [(String, Type)]
 checkStructFields items = do
-  let fieldItems = [ (ident, ts) | StructField ident ts <- items ]
+  let fieldItems = [(ident, ts) | StructField ident ts <- items]
   acc <- foldM checkField [] fieldItems
   return (reverse acc)
   where
@@ -59,14 +60,16 @@ checkStructFields items = do
           return $ (name, t) : acc
 
 checkStructMembers :: Maybe (String, Mutability) -> [(String, Type)] -> [StructItem] -> Check [(String, (Type, Mutability))]
-checkStructMembers mStructNameInfo fields items = checkMembers [] [ decl | StructMemberDecl decl <- items ]
+checkStructMembers mStructNameInfo fields items = checkMembers [] [decl | StructMemberDecl decl <- items]
   where
     checkMembers acc [] = return (reverse acc)
     checkMembers acc (decl@(ParsedValueDecl memberMut memberIdent _ _) : rest) = do
       let memberName = identName memberIdent
       when (memberName `elem` map fst fields || memberName `elem` map fst acc) $
-        liftEither $ Left $ DuplicateDeclaration (identPos memberIdent) memberName
-      
+        liftEither $
+          Left $
+            DuplicateDeclaration (identPos memberIdent) memberName
+
       -- stacks new scope and saves member in it (binds the value to the namespace)
       TypedValueDecl _ _ memberType _ <- withScope $ do
         case mStructNameInfo of
@@ -75,7 +78,7 @@ checkStructMembers mStructNameInfo fields items = checkMembers [] [ decl | Struc
             modifyEnv $ bindInCurrentScope structName (currentStructType, mut)
           Nothing -> return ()
         checkDecl decl
-      
+
       let newAcc = (memberName, (memberType, memberMut)) : acc
       case mStructNameInfo of
         Just (structName, mut) -> do
@@ -93,7 +96,7 @@ checkProgramWithEnv :: TypeEnv -> ParsedProgram -> Either Error (TypedProgram, T
 checkProgramWithEnv env (Program toplevels) =
   runCheck env $ do
     let smts = map topLevelStmt toplevels
-    installStructs smts  
+    installStructs smts
     let fns = functionItems smts
     installFunctionItems fns
     validateMain fns
@@ -122,7 +125,7 @@ checkTopLevel (TopLevelStmt stmt)
 checkReplWithEnv :: TypeEnv -> ParsedRepl -> Either Error (TypedRepl, TypeEnv)
 checkReplWithEnv env (Repl inputs) =
   runCheck env $ do
-    let stmts = mapMaybe (\case { ReplStmt s -> Just s; _ -> Nothing }) inputs
+    let stmts = mapMaybe (\case ReplStmt s -> Just s; _ -> Nothing) inputs
     installStructs stmts
     installFunctionItems (mapMaybe isStmtAndFunctionItem inputs)
     typedInputs <- mapM checkReplInput inputs
@@ -165,9 +168,11 @@ checkExprM (ParsedExpr pos k) = case k of
   ParsedWhileExpr c b mElse -> checkWhileExpr pos c b mElse
   ParsedFnExpr params ret body -> checkFnExpr pos params ret body
   ParsedCallExpr callee args -> checkCallExpr pos callee args
-  ParsedStructInit maybeName fields -> checkStructInit pos maybeName fields 
+  ParsedStructInit maybeName fields -> checkStructInit pos maybeName fields
   ParsedMemberAccess expr fieldIdent -> checkMemberAccess pos expr fieldIdent
   ParsedTypeExpr ts -> TypedExpr pos TypeT . TypedTypeLit <$> checkType ts
+  ParsedArrayLit exprs -> checkArrayLit pos exprs
+  ParsedIndexExpr base idx -> checkIndexExpr pos base idx
   ParsedBreakExpr mExpr -> checkBreakExpr pos mExpr
   ParsedContinueExpr -> checkContinueExpr pos
 
@@ -194,7 +199,8 @@ checkStructInit pos mName fields = do
     Just structIdent@(Ident structPos structName) -> do
       env <- getEnv
       case lookupName structName env of
-        Just (StructT declaredFields declaredMembers, _) -> do -- success
+        Just (StructT declaredFields declaredMembers, _) -> do
+          -- success
           typedFields <- mapM (typecheckNamedField declaredFields) fields
           return $ TypedExpr pos (StructT declaredFields declaredMembers) (TypedStructInit (Just structIdent) typedFields)
         Just (otherType, _) ->
@@ -217,9 +223,10 @@ checkStructInit pos mName fields = do
           te <- checkExprM expr
           let inferredType = typeOf te
           unless (compatible expectedType inferredType) $
-            liftEither $ Left $ TypeMismatch fieldPos expectedType inferredType
+            liftEither $
+              Left $
+                TypeMismatch fieldPos expectedType inferredType
           return (name, te)
-
 
 checkIfExpr :: AlexPosn -> ParsedExpr -> ParsedBlock -> Maybe ParsedBlock -> Check TypedExpr
 checkIfExpr pos c t mElse = do
@@ -338,7 +345,8 @@ checkMemberAccess pos expr fieldIdent@(Ident fieldPos fieldName) = do
     StructT fields members ->
       case lookup fieldName fields of
         Just fieldType -> return $ TypedExpr pos fieldType (TypedMemberAccess typedExpr fieldIdent)
-        Nothing -> -- If its not a field, search it as a member
+        Nothing ->
+          -- If its not a field, search it as a member
           case lookup fieldName members of
             Just (memberType, _) -> return $ TypedExpr pos memberType (TypedMemberAccess typedExpr fieldIdent)
             Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
@@ -350,6 +358,44 @@ checkBinaryExpr pos op l r = do
   tr <- checkExprM r
   ty <- liftEither $ checkBinaryOp pos op (typeOf tl) (typeOf tr)
   return $ TypedExpr pos ty (TypedBinaryExpr op tl tr)
+
+checkArrayLit :: AlexPosn -> [ParsedExpr] -> Check TypedExpr
+checkArrayLit pos [] =
+  return (TypedExpr pos (ArrT AnyTypeT) (TypedArrayLit []))
+checkArrayLit pos (first : rest) = do
+  typedFirst <- checkExprM first
+  let expectedType = typeOf typedFirst
+
+  typedRest <- mapM checkExprM rest
+
+  mapM_
+    ( \item ->
+        unless (compatible expectedType (typeOf item)) $
+          liftEither $
+            Left $
+              TypeMismatch (typedExprPos item) expectedType (typeOf item)
+    )
+    typedRest
+
+  let fullTypedArray = typedFirst : typedRest
+  return (TypedExpr pos (ArrT expectedType) (TypedArrayLit fullTypedArray))
+
+checkIndexExpr :: AlexPosn -> ParsedExpr -> ParsedExpr -> Check TypedExpr
+checkIndexExpr pos base idx = do
+  typedBase <- checkExprM base
+  typedIdx <- checkExprM idx
+
+  -- 1. Enforce that the index expression resolves to an integer
+  case typeOf typedIdx of
+    IntT _ _ -> return ()
+    other -> liftEither $ Left $ TypeMismatch (typedExprPos typedIdx) (IntT Signed I32) other
+
+  -- 2. Validate that the entity being indexed is an array
+  case typeOf typedBase of
+    ArrT innerType ->
+      return $ TypedExpr pos innerType (TypedIndexExpr typedBase typedIdx)
+    otherType ->
+      liftEither $ Left $ NotCallable pos otherType
 
 checkOpWith :: (Type -> Type -> Bool) -> (Type -> Type -> Type) -> AlexPosn -> BinaryOp -> Type -> Type -> Either Error Type
 checkOpWith predicate result pos op t1 t2
@@ -400,8 +446,9 @@ compatible t1 t2 = case (t1, t2) of
   (StructT fields1 _, StructT fields2 _) ->
     let sf1 = sortOn fst fields1
         sf2 = sortOn fst fields2
-    in length sf1 == length sf2 &&
-       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
+     in length sf1 == length sf2
+          && and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
+  (ArrT a1, ArrT a2) -> compatible a1 a2
   (_, _) -> False
 
 isNumeric :: Type -> Bool
@@ -449,21 +496,22 @@ checkDecl (ParsedValueDecl mut ident mTs (ParsedExpr exprPos (ParsedTypeExpr (Ty
       let finalTe = TypedExpr exprPos TypeT (TypedTypeLit finalStructType)
       return $ TypedValueDecl mut ident finalStructType finalTe
     _ -> do
-      fields <- checkStructFields structItems 
+      fields <- checkStructFields structItems
       bindIdent ident (StructT fields []) mut -- saves the structs fields so they can be referenced within it
-
       members <- checkStructMembers (Just (structName, mut)) fields structItems
       let finalStructType = StructT fields members
 
       -- saves the complete struct (fields and members  )
       modifyEnv $ bindInCurrentScope structName (finalStructType, mut)
 
-      -- validates type hint (if present) 
+      -- validates type hint (if present)
       case mTs of
         Just ts -> do
           t <- checkType ts
           unless (compatible t TypeT) $
-            liftEither $ Left $ TypeMismatch (identPos ident) t TypeT
+            liftEither $
+              Left $
+                TypeMismatch (identPos ident) t TypeT
         Nothing -> return ()
 
       let finalTe = TypedExpr exprPos TypeT (TypedTypeLit finalStructType)
@@ -476,17 +524,16 @@ checkDecl (ParsedValueDecl mut ident mTs expr) = do
     Just ts -> Just <$> checkType ts
   te <- checkExprM expr
   let inferred = typeOf te
-  
-  
+
   let typeToBind = case typedExprKind te of
         TypedTypeLit resolvedType -> resolvedType
-        _                         -> inferred
-        
+        _ -> inferred
+
   -- checks if the type hint (if any) is compatible with the inferred type
   case mt of
     Just t | not $ compatible t inferred -> liftEither $ Left $ TypeMismatch (identPos ident) t inferred
     _ -> pure ()
-    
+
   bindIdent ident typeToBind mut
   return $ TypedValueDecl mut ident typeToBind te
 
@@ -530,10 +577,10 @@ checkAssign (ParsedAssign lValue expr) = do
   typedExpr <- checkExprM expr
   let inferredType = typeOf typedExpr
   unless (compatible expectedType inferredType) $
-    liftEither $ Left $ TypeMismatch pos expectedType inferredType
+    liftEither $
+      Left $
+        TypeMismatch pos expectedType inferredType
   return $ TypedAssign typedLValue typedExpr
-
-  
 
 bindIdent :: Ident -> Type -> Mutability -> Check ()
 bindIdent (Ident pos name) typ mut = do

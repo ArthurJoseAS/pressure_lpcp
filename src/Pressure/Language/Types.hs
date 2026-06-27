@@ -19,6 +19,7 @@ data Type
   | IntT Sign IntSize
   | FloatT FloatSize
   | FnT [Type] Type
+  | ArrT Type
   | StringT
   | UnitT
   | TypeT
@@ -40,6 +41,7 @@ prettyType = \case
   FloatT F32 -> "f32"
   FloatT F64 -> "f64"
   FnT params ret -> "fn(" ++ intercalate ", " (map prettyType params) ++ ") -> " ++ prettyType ret
+  ArrT t -> "[]" ++ prettyType t
   StringT -> "string"
   UnitT -> "unit"
   TypeT -> "type"
