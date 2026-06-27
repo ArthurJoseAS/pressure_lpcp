@@ -19,6 +19,6 @@ errorTests =
 testRuntimeErrorMessageFormat :: IO ()
 testRuntimeErrorMessageFormat = do
   let pos = AlexPn 0 1 10
-  let (mPos, m) = Eval.errorInfo (RuntimeError (DivisionByZero pos))
+  let (mPos, m) = Eval.errorInfo (Eval.RuntimeError (DivisionByZero pos))
   assertEqual "runtime div by zero pos" (Just pos) mPos
   assertEqual "runtime div by zero text" "division by zero" m

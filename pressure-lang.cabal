@@ -65,6 +65,7 @@ library
     Pressure.Interpreter.Env
     Pressure.Interpreter.Error
     Pressure.Interpreter.Eval
+    Pressure.Interpreter.Program
     Pressure.Interpreter.Repl
     Pressure.Interpreter.Value
     Pressure.Language.Ast
@@ -129,6 +130,7 @@ test-suite pressure-lang-test
     Pressure.Interpreter.ErrorTest
     Pressure.Interpreter.FunctionTest
     Pressure.Interpreter.LiteralTest
+    Pressure.Interpreter.ProgramTest
     Pressure.InterpreterTest
     Pressure.Language.LexerTest
     Pressure.Language.Parser.ErrorTest

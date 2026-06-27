@@ -1,8 +1,9 @@
 module Pressure.Typechecker.ErrorTest (errorTypeTests) where
 
+import Control.Monad (void)
 import Pressure.Language.Ast
 import Pressure.Language.Lexer (AlexPosn (..), runAlex)
-import Pressure.Language.Parser (parseProgram)
+import Pressure.Language.Parser (parseRepl)
 import Pressure.Language.Types
 import Pressure.TestUtil (assertEqual, assertLeft, assertOk, checkErr, identFrom, pos0)
 import Pressure.Typechecker (Error, checkProgram, checkRepl, checkReplWithEnv)
@@ -43,9 +44,9 @@ expr :: ParsedExprKind -> ParsedExpr
 expr = ParsedExpr pos0
 
 checkSource :: String -> Either Error ()
-checkSource source = case runAlex source parseProgram of
+checkSource source = case runAlex source parseRepl of
   Left err -> error $ "parse failed: " ++ err
-  Right ast -> checkProgram ast
+  Right ast -> void $ checkRepl ast
 
 testBoolInArithmeticError :: IO ()
 testBoolInArithmeticError = checkErr "bool in arithmetic" "x: int = true + 1;"
@@ -94,20 +95,24 @@ testTypeErrorMessageFormat :: IO ()
 testTypeErrorMessageFormat = do
   let pos = AlexPn 0 1 10
   let (p, m) = errorInfo (T.TypeMismatch pos (IntT Signed I32) BoolT)
-  assertEqual "type mismatch pos" pos p
+  assertEqual "type mismatch pos" (Just pos) p
   assertEqual "type mismatch text" "type mismatch: expected 'i32', found 'bool'" m
 
   let (p2, m2) = errorInfo (T.UnsupportedOp pos AddOp (IntT Signed I32) BoolT)
-  assertEqual "unsupported op pos" pos p2
+  assertEqual "unsupported op pos" (Just pos) p2
   assertEqual "unsupported op text" "cannot use operator '+' on type 'i32' and 'bool'" m2
 
   let (p3, m3) = errorInfo (T.UndefinedVariable pos "foo")
-  assertEqual "type undefined pos" pos p3
+  assertEqual "type undefined pos" (Just pos) p3
   assertEqual "type undefined text" "undefined variable 'foo'" m3
 
   let (p4, m4) = errorInfo (T.UndefinedType pos "bar")
-  assertEqual "type undefined type pos" pos p4
+  assertEqual "type undefined type pos" (Just pos) p4
   assertEqual "type undefined type text" "undefined type 'bar'" m4
+
+  let (p5, m5) = errorInfo T.MissingMain
+  assertEqual "missing main pos" Nothing p5
+  assertEqual "missing main text" "missing main function in the top level declarations" m5
 
 testTopLevelTypes :: IO ()
 testTopLevelTypes = do

@@ -1,9 +1,8 @@
 module Pressure.Typechecker.Check where
 
 import Control.Monad (foldM, unless, when)
-import Control.Monad.Except (liftEither)
+import Control.Monad.Except (MonadError (throwError), liftEither)
 import Control.Monad.State (MonadState (..), StateT (runStateT), put)
-import Data.Functor (void)
 import Data.Map qualified as Map
 import Data.Maybe (isJust, mapMaybe)
 import Pressure.Builtins (checkAsCall, checkPrintfCall, initialTypeEnv, isAs, isPrintf)
@@ -36,22 +35,30 @@ checkType (TypeSyntax pos k) = case k of
 
 -- Program
 
-checkProgram :: ParsedProgram -> Either Error ()
-checkProgram = void . checkProgramTyped
+checkProgram :: ParsedProgram -> Either Error TypedProgram
+checkProgram = fmap fst . checkProgramWithEnv initialTypeEnv
 
-checkProgramTyped :: ParsedProgram -> Either Error TypedProgram
-checkProgramTyped (Program toplevels) =
-  fst
-    <$> runCheck
-      initialTypeEnv
-      ( do
-          let stmts = map topLevelStmt toplevels
-          installFunctionItems stmts
-          typedTopLevels <- mapM checkTopLevel toplevels
-          return $ Program typedTopLevels
-      )
+checkProgramWithEnv :: TypeEnv -> ParsedProgram -> Either Error (TypedProgram, TypeEnv)
+checkProgramWithEnv env (Program toplevels) =
+  runCheck env $ do
+    let smts = map topLevelStmt toplevels
+    let fns = functionItems smts
+    installFunctionItems fns
+    validateMain fns
+    typedTopLevels <- mapM checkTopLevel toplevels
+    return $ Program typedTopLevels
   where
     topLevelStmt (TopLevelStmt stmt) = stmt
+
+    validateMain [] = throwError MissingMain
+    validateMain ((FunctionItem (Ident pos name) params ts) : fs)
+      | name == "main" = validMainSignature pos params ts
+      | otherwise = validateMain fs
+
+    validMainSignature _ [] (TypeSyntax _ UnitSyntax) = pure ()
+    validMainSignature pos params ts@(TypeSyntax _ _) = do
+      (typedParams, typedRet) <- checkFnSig params ts
+      throwError $ InvalidMain pos (FnT (map (\(TypedParam _ t) -> t) typedParams) typedRet)
 
 -- FIX: Support only value declarations in the top level.
 checkTopLevel :: ParsedTopLevel -> Check TypedTopLevel
@@ -170,9 +177,7 @@ checkUnaryExpr pos op e = do
 
 checkFnExpr :: AlexPosn -> [Param] -> TypeSyntax -> ParsedBlock -> Check TypedExpr
 checkFnExpr pos params ret body = do
-  checkDuplicateParams params
-  typedRet <- checkType ret
-  typedParams <- mapM checkParam params
+  (typedParams, typedRet) <- checkFnSig params ret
   outerState <- get
   let env = fst outerState
   put (pushScope env, [])
@@ -184,6 +189,13 @@ checkFnExpr pos params ret body = do
   where
     tymismatch r b = Left $ TypeMismatch pos r (blockType b)
     tyexpr ts ps r b = TypedExpr pos (FnT ts r) (TypedFnExpr ps r b)
+
+checkFnSig :: [Param] -> TypeSyntax -> Check ([TypedParam], Type)
+checkFnSig params ret = do
+  checkDuplicateParams params
+  typedRet <- checkType ret
+  typedParams <- mapM checkParam params
+  return (typedParams, typedRet)
 
 checkDuplicateParams :: [Param] -> Check ()
 checkDuplicateParams = go Map.empty
@@ -343,14 +355,13 @@ typedParamType (TypedParam _ typ) = typ
 
 -- Function items
 
-functionItem :: ParsedStmt -> Maybe ParsedStmt
-functionItem i = case i of
-  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant _ _ (ParsedExpr _ (ParsedFnExpr {})))) -> Just i
+functionItem :: ParsedStmt -> Maybe FunctionItem
+functionItem = \case
+  ParsedStmt _ (ParsedDeclStmt (ParsedValueDecl Constant i _ (ParsedExpr _ (ParsedFnExpr params ts _)))) -> Just $ FunctionItem i params ts
   _ -> Nothing
 
-installFunctionItems :: [ParsedStmt] -> Check ()
-installFunctionItems stmts = do
-  let fns = functionItems stmts
+installFunctionItems :: [FunctionItem] -> Check ()
+installFunctionItems fns = do
   checkDuplicateFunctions (fnItemsPos fns) (map (identName . fnItemIdent) fns)
   typedFns <- mapM typeFunctionItem fns
   unless (null fns) $ modifyEnv pushScope
@@ -392,7 +403,7 @@ checkBlock block = fst <$> runCheck [] (checkBlockM block)
 checkBlockM :: ParsedBlock -> Check TypedBlock
 checkBlockM (Block stmts expr) = do
   outerEnv <- getEnv
-  installFunctionItems stmts
+  installFunctionItems (functionItems stmts)
   fnScope <- getEnv
   typedStmts <- mapM (checkStmtInBlock fnScope) stmts
   typedExpr <- traverse checkExprM expr

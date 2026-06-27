@@ -15,6 +15,7 @@ module Pressure.TestUtil
     checkOk,
     checkErr,
     evalParsed,
+    evalProgramFromSource,
   )
 where
 
@@ -23,13 +24,13 @@ import Control.Monad.State (runStateT)
 import Data.Map.Strict qualified as Map
 import Pressure.Builtins (initialValueEnv)
 import Pressure.Interpreter.Env (Env)
-import Pressure.Interpreter.Error (Error (..), RuntimeError (..))
-import Pressure.Interpreter.Eval (evalExpr, evalRepl)
+import Pressure.Interpreter.Error (Error (..), EvalError, RuntimeError (..))
+import Pressure.Interpreter.Eval (evalExpr, evalProgram, evalRepl)
 import Pressure.Interpreter.Value (Value (..))
 import Pressure.Language.Ast
 import Pressure.Language.Lexer (AlexPosn (..), runAlex)
-import Pressure.Language.Parser (parseRepl)
-import Pressure.Typechecker (checkRepl)
+import Pressure.Language.Parser (genAst, parseProgram, parseRepl)
+import Pressure.Typechecker (checkProgram, checkRepl)
 import Test.Tasty.HUnit qualified as HUnit
 
 assertEqual :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -55,7 +56,7 @@ assertExpr name expr env expected = do
     Right (val, _) ->
       HUnit.assertEqual name expected val
 
-assertEvalError :: String -> TypedExpr -> Env -> Error -> IO ()
+assertEvalError :: String -> TypedExpr -> Env -> EvalError -> IO ()
 assertEvalError name expr env expectedErr = do
   result <- runExceptT (runStateT (evalExpr expr) env)
   case result of
@@ -100,8 +101,20 @@ checkErr name source =
       Left _ -> return ()
       Right _ -> error $ name ++ ": expected type error but passed"
 
-evalParsed :: String -> ParsedRepl -> IO (Either Error (Value, Env))
+evalParsed :: String -> ParsedRepl -> IO (Either EvalError (Value, Env))
 evalParsed name ast =
   case checkRepl ast of
     Left err -> error $ name ++ " type check failed: " ++ show err
     Right typedAst -> runExceptT (runStateT (evalRepl typedAst) emptyEnv)
+
+evalProgramFromSource :: String -> IO (Either Error Value)
+evalProgramFromSource source =
+  case genAst source parseProgram of
+    Left parseErr -> return $ Left $ ParseError parseErr
+    Right ast -> case checkProgram ast of
+      Left typeErr -> return $ Left $ TypeError typeErr
+      Right typedAst -> do
+        result <- runExceptT $ runStateT (evalProgram typedAst) initialValueEnv
+        return $ case result of
+          Left err -> Left $ EvalError err
+          Right (val, _) -> Right val

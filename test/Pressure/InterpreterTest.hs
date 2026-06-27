@@ -6,6 +6,7 @@ import Pressure.Interpreter.ControlTest (controlTests)
 import Pressure.Interpreter.ErrorTest (errorTests)
 import Pressure.Interpreter.FunctionTest (functionTests)
 import Pressure.Interpreter.LiteralTest (literalTests)
+import Pressure.Interpreter.ProgramTest (programTests)
 import Test.Tasty (TestTree, testGroup)
 
 interpreterTests :: TestTree
@@ -17,5 +18,6 @@ interpreterTests =
       assignTests,
       errorTests,
       controlTests,
-      functionTests
+      functionTests,
+      programTests
     ]

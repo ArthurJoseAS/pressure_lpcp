@@ -1,8 +1,6 @@
-module Pressure.Interpreter.ArithTest
-  ( arithTests,
-  )
-where
+module Pressure.Interpreter.ArithTest (arithTests) where
 
+import Pressure.Interpreter.Error qualified as Eval
 import Pressure.Interpreter.Value (Value (..))
 import Pressure.Language.Ast
 import Pressure.Language.Types
@@ -23,14 +21,14 @@ testDivByZero = do
   withTokens "division by zero int" "x: int = 1 / 0;" $ \ast -> do
     result <- evalParsed "division by zero int" ast
     case result of
-      Left (RuntimeError (DivisionByZero _)) -> return ()
+      Left (Eval.RuntimeError (DivisionByZero _)) -> return ()
       Left err -> error $ "expected 'division by zero' got '" ++ show err ++ "'"
       Right _ -> error "expected runtime error for division by zero"
 
   withTokens "division by zero float" "x: float = 1.0 / 0.0;" $ \ast -> do
     result <- evalParsed "division by zero float" ast
     case result of
-      Left (RuntimeError (DivisionByZero _)) -> return ()
+      Left (Eval.RuntimeError (DivisionByZero _)) -> return ()
       Left err -> error $ "expected 'division by zero' got '" ++ show err ++ "'"
       Right _ -> error "expected runtime error for division by zero"
 
