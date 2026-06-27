@@ -88,6 +88,8 @@ checkTopLevel (TopLevelStmt stmt)
 checkReplWithEnv :: TypeEnv -> ParsedRepl -> Either Error (TypedRepl, TypeEnv)
 checkReplWithEnv env (Repl inputs) =
   runCheck env $ do
+    let stmts = mapMaybe (\case { ReplStmt s -> Just s; _ -> Nothing }) inputs
+    installStructs stmts
     installFunctionItems (mapMaybe isStmtAndFunctionItem inputs)
     typedInputs <- mapM checkReplInput inputs
     return $ Repl typedInputs
@@ -464,6 +466,12 @@ installFunctionItems stmts = do
   unless (null fns) $ modifyEnv pushScope
   mapM_ (\(Ident pos name, typ) -> bindIdent (Ident pos name) typ Constant) typedFns
 
+installStructs :: [ParsedStmt] -> Check ()
+installStructs stmts = do
+  let decls = structDecls stmts
+  checkDuplicateStructs decls
+  mapM_ checkDecl decls
+
 data FunctionItem = FunctionItem Ident [Param] TypeSyntax
 
 fnItemIdent :: FunctionItem -> Ident
@@ -500,6 +508,7 @@ checkBlock block = fst <$> runCheck [] (checkBlockM block)
 checkBlockM :: ParsedBlock -> Check TypedBlock
 checkBlockM (Block stmts expr) = do
   outerEnv <- getEnv
+  installStructs stmts
   installFunctionItems stmts
   fnScope <- getEnv
   typedStmts <- mapM (checkStmtInBlock fnScope) stmts
