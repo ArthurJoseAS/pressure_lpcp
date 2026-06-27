@@ -40,23 +40,50 @@ checkType (TypeSyntax pos k) = case k of
   FnSyntax params ret -> FnT <$> mapM checkType params <*> checkType ret
   UnitSyntax -> return UnitT
   StructSyntax structItems -> do
-    -- Aux recursive type check fields and enforce unicity
-    let checkFields acc [] = return (reverse acc)
-        checkFields acc (item : rest) = case item of
-          StructField (Ident fieldPos name) typeSyntax -> do
-            -- Checks if the accumulator list already has that name
-            -- NOTE : Linear search
-            if name `elem` map fst acc
-              then liftEither $ Left $ DuplicateDeclaration fieldPos name
-              else do
-                fieldType <- checkType typeSyntax
-                checkFields ((name, fieldType) : acc) rest
-          -- TODO : Implement struct members
-          StructMemberDecl _decl ->
-            checkFields acc rest
-    resolvedFields <- checkFields [] structItems
-    return $ StructT resolvedFields []
+    fields <- checkStructFields structItems
+    members <- checkStructMembers Nothing fields structItems
+    return $ StructT fields members
   StringSyntax -> return StringT
+
+checkStructFields :: [StructItem] -> Check [(String, Type)]
+checkStructFields items = do
+  let fieldItems = [ (ident, ts) | StructField ident ts <- items ]
+  acc <- foldM checkField [] fieldItems
+  return (reverse acc)
+  where
+    checkField acc (Ident pos name, ts)
+      -- name already declared
+      | name `elem` map fst acc = liftEither $ Left $ DuplicateDeclaration pos name
+      | otherwise = do
+          t <- checkType ts
+          return $ (name, t) : acc
+
+checkStructMembers :: Maybe (String, Mutability) -> [(String, Type)] -> [StructItem] -> Check [(String, (Type, Mutability))]
+checkStructMembers mStructNameInfo fields items = checkMembers [] [ decl | StructMemberDecl decl <- items ]
+  where
+    checkMembers acc [] = return (reverse acc)
+    checkMembers acc (decl@(ParsedValueDecl memberMut memberIdent _ _) : rest) = do
+      let memberName = identName memberIdent
+      when (memberName `elem` map fst fields || memberName `elem` map fst acc) $
+        liftEither $ Left $ DuplicateDeclaration (identPos memberIdent) memberName
+      
+      -- TODO : figure out how to 'publish' a constant
+      -- stacks new scope and saves member in it (binds the value to the namespace)
+      TypedValueDecl _ _ memberType _ <- withScope $ do
+        case mStructNameInfo of
+          Just (structName, mut) -> do
+            let currentStructType = StructT fields acc
+            modifyEnv $ bindInCurrentScope structName (currentStructType, mut)
+          Nothing -> return ()
+        checkDecl decl
+      
+      let newAcc = (memberName, (memberType, memberMut)) : acc
+      case mStructNameInfo of
+        Just (structName, mut) -> do
+          let nextStructType = StructT fields newAcc
+          modifyEnv $ bindInCurrentScope structName (nextStructType, mut)
+        Nothing -> return ()
+      checkMembers newAcc rest
 
 -- Program
 
@@ -70,6 +97,8 @@ checkProgramTyped (Program toplevels) =
       initialTypeEnv
       ( do
           let stmts = map topLevelStmt toplevels
+          -- checks types beforea functions, so they can be used in their definitions.
+          installStructs stmts 
           installFunctionItems stmts
           typedTopLevels <- mapM checkTopLevel toplevels
           return $ Program typedTopLevels
@@ -77,7 +106,6 @@ checkProgramTyped (Program toplevels) =
   where
     topLevelStmt (TopLevelStmt stmt) = stmt
 
--- FIX: Support only value declarations in the top level.
 checkTopLevel :: ParsedTopLevel -> Check TypedTopLevel
 checkTopLevel (TopLevelStmt stmt)
   | isJust $ functionItem stmt = TopLevelStmt <$> checkFunctionItemStmt stmt
@@ -296,10 +324,13 @@ checkMemberAccess :: AlexPosn -> ParsedExpr -> Ident -> Check TypedExpr
 checkMemberAccess pos expr fieldIdent@(Ident fieldPos fieldName) = do
   typedExpr <- checkExprM expr
   case typeOf typedExpr of
-    StructT fields _ ->
+    StructT fields members ->
       case lookup fieldName fields of
         Just fieldType -> return $ TypedExpr pos fieldType (TypedMemberAccess typedExpr fieldIdent)
-        Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
+        Nothing -> -- If its not a field, search it as a member
+          case lookup fieldName members of
+            Just (memberType, _) -> return $ TypedExpr pos memberType (TypedMemberAccess typedExpr fieldIdent)
+            Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
     t -> liftEither $ Left $ TypeMismatch pos (StructT [] []) t
 
 checkBinaryExpr :: AlexPosn -> BinaryOp -> ParsedExpr -> ParsedExpr -> Check TypedExpr
@@ -352,17 +383,13 @@ compatible t1 t2 = case (t1, t2) of
   (AnyTypeT, _) -> True
   (_, AnyTypeT) -> True
   (FnT ps1 r1, FnT ps2 r2) -> length ps1 == length ps2 && and (zipWith compatible ps1 ps2) && compatible r1 r2
-  -- NOTE : This is sorting the fields by their names so that the definiton order
-  -- is irrelevant. Consider using a 
-  (StructT fields1 members1, StructT fields2 members2) ->
+  -- NOTE : This is sorting the fields by their ids so that the definition order doesnt hinder the type checking.
+  -- using some form of dictionary solves this
+  (StructT fields1 _, StructT fields2 _) ->
     let sf1 = sortOn fst fields1
         sf2 = sortOn fst fields2
-        sm1 = sortOn fst members1
-        sm2 = sortOn fst members2
     in length sf1 == length sf2 &&
-       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2) &&
-       length sm1 == length sm2 &&
-       and (zipWith (\(n1, (t1', m1)) (n2, (t2', m2)) -> n1 == n2 && m1 == m2 && compatible t1' t2') sm1 sm2)
+       and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
   (_, _) -> False
 
 isNumeric :: Type -> Bool
@@ -401,17 +428,49 @@ checkFunctionItemStmt (ParsedStmt pos (ParsedDeclStmt (ParsedValueDecl m ident m
 checkFunctionItemStmt stmt = checkStmtM stmt
 
 checkDecl :: ParsedDecl -> Check TypedDecl
+-- if rhs is a struct type expression
+checkDecl (ParsedValueDecl mut ident mTs (ParsedExpr exprPos (ParsedTypeExpr (TypeSyntax _ (StructSyntax structItems))))) = do
+  let structName = identName ident
+  env <- getEnv
+  case lookupName structName env of -- avoids infinite recursion with recursive types and subprogram definitions
+    Just (finalStructType@(StructT _ _), _) -> do
+      let finalTe = TypedExpr exprPos TypeT (TypedTypeLit finalStructType)
+      return $ TypedValueDecl mut ident finalStructType finalTe
+    _ -> do
+      fields <- checkStructFields structItems 
+      bindIdent ident (StructT fields []) mut -- saves the structs fields so they can be referenced within it
+
+      members <- checkStructMembers (Just (structName, mut)) fields structItems
+      let finalStructType = StructT fields members
+
+      -- saves the complete struct (fields and members  )
+      modifyEnv $ bindInCurrentScope structName (finalStructType, mut)
+
+      -- validates type hint (if present) 
+      case mTs of
+        Just ts -> do
+          t <- checkType ts
+          unless (compatible t TypeT) $
+            liftEither $ Left $ TypeMismatch (identPos ident) t TypeT
+        Nothing -> return ()
+
+      let finalTe = TypedExpr exprPos TypeT (TypedTypeLit finalStructType)
+      return $ TypedValueDecl mut ident finalStructType finalTe
+
+-- if its anything else
 checkDecl (ParsedValueDecl mut ident mTs expr) = do
-  mt <- traverse checkType mTs
+  mt <- case mTs of
+    Nothing -> return Nothing
+    Just ts -> Just <$> checkType ts
   te <- checkExprM expr
   let inferred = typeOf te
   
-  -- Se o lado direito for um literal de tipo (TypedTypeLit), nós vinculamos
-  -- no ambiente o tipo resolvido em si (ex: StructT), e não a constante TypeT.
+  
   let typeToBind = case typedExprKind te of
         TypedTypeLit resolvedType -> resolvedType
         _                         -> inferred
         
+  -- checks if the type hint (if any) is compatible with the inferred type
   case mt of
     Just t | not $ compatible t inferred -> liftEither $ Left $ TypeMismatch (identPos ident) t inferred
     _ -> pure ()
@@ -465,6 +524,29 @@ installFunctionItems stmts = do
   typedFns <- mapM typeFunctionItem fns
   unless (null fns) $ modifyEnv pushScope
   mapM_ (\(Ident pos name, typ) -> bindIdent (Ident pos name) typ Constant) typedFns
+
+-- filters struct declarations from other statements
+structDecls :: [ParsedStmt] -> [ParsedDecl]
+structDecls stmts = mapMaybe extractStructDecl stmts
+  where
+    -- functions to identify struct declarations
+    extractStructDecl (ParsedStmt _ (ParsedDeclStmt decl))
+      | isStructValueDecl decl = Just decl
+    extractStructDecl _ = Nothing
+
+    isStructValueDecl (ParsedValueDecl _ _ _ expr) = isStructExpr expr
+
+    isStructExpr (ParsedExpr _ (ParsedTypeExpr (TypeSyntax _ (StructSyntax _)))) = True
+    isStructExpr _ = False
+
+-- Checks duplicate struct definition in the same scope. exits with error if it finds it
+checkDuplicateStructs :: [ParsedDecl] -> Check ()
+checkDuplicateStructs decls = go [] decls
+  where
+    go _ [] = return ()
+    go seen (ParsedValueDecl _ (Ident pos name) _ _ : rest)
+      | name `elem` seen = liftEither $ Left (DuplicateDeclaration pos name)
+      | otherwise = go (name : seen) rest
 
 installStructs :: [ParsedStmt] -> Check ()
 installStructs stmts = do

@@ -227,3 +227,15 @@ testStructTypes = do
   assertLeft "member access type mismatch rejected" $
     checkSource "f :: fn(p: struct { x: i32, y: bool }) -> i32 { p.y };"
 
+  -- 17. Declaring and typechecking struct members/constants
+  assertOk "declaring struct constant member and accessing it via dot" $
+    checkSource "MyStruct :: struct { x: i32, y: bool, CONSTANTE :: 42; }; c : i32 = MyStruct.CONSTANTE;"
+
+  -- 18. Declaring and typechecking struct methods with self reference
+  assertOk "declaring struct method and accessing it via dot" $
+    checkSource "MyStruct :: struct { x: i32, y: bool, getX :: fn(self: MyStruct) -> i32 { self.x }; };"
+
+  -- 19. Function referencing a struct type defined in same scope (after the function)
+  assertOk "function referencing struct type defined later in the same scope" $
+    checkSource "f :: fn(s: MyStruct) -> i32 { s.x }; MyStruct :: struct { x: i32 };"
+
