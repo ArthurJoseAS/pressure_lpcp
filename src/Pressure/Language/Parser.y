@@ -189,9 +189,11 @@ UnaryExpr : '-' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NegOp $2
           | '!' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NotOp $2) }
           | CallExpr      { $1 }
 
-CallExpr : AtomExpr              { $1 }
+CallExpr : AtomExpr            { $1 }
          | CallExpr '(' Args ')' { ParsedExpr (exprPos $1) (ParsedCallExpr $1 $3) }
          | CallExpr UnitLit      { ParsedExpr (exprPos $1) (ParsedCallExpr $1 []) }
+         | CallExpr '[' Expr ']'     { ParsedExpr (exprPos $1) (ParsedIndexExpr $1 $3) }
+
 
 Args : ArgList { $1 }
      |         { [] }
@@ -204,6 +206,7 @@ AtomExpr : INT_LITERAL     { toIntLit $1 }
          | STRING_LITERAL  { toStringLit $1 }
          | true            { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
          | false           { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
+         | ArrayLit       { $1 }
          | '(' Expr ')'    { $2 }
          | UnitLit         { ParsedExpr (token_posn $1) ParsedUnitLit }
          | ID              { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
@@ -213,6 +216,7 @@ AtomExpr : INT_LITERAL     { toIntLit $1 }
          | StructType      { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
          | BUILTIN_ID      { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
 
+ArrayLit : '[' Args ']'   { ParsedExpr (token_posn $1) (ParsedArrayLit $2) }
 
 {- types -}
 
@@ -220,6 +224,7 @@ OptType : TypeExpr { Just $1 }
         |          { Nothing }
 
 TypeExpr : FnType     { $1 }
+         | ArrType    { $1 }
          | TypeLit    { $1 }
          | StructType { $1 }
          | ID         { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
@@ -233,6 +238,8 @@ FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1)
 
 FnParamsTypesList : TypeExpr                       { [$1] }
                   | TypeExpr ',' FnParamsTypesList { $1 : $3 }
+
+ArrType : '[' ']' TypeExpr {TypeSyntax (token_posn $1) (ArraySyntax $3)}
 
 TypeLit : type    { TypeSyntax (token_posn $1) TySyntax }
         | anytype { TypeSyntax (token_posn $1) AnyTypeSyntax }

@@ -16,6 +16,7 @@ data Value
   | VType Type
   | VEmpty
   | VFunction [TypedParam] Type TypedBlock ValueEnv
+  | VArray [Value]
   | VBuiltin String
   | VStruct [(String, Value)]
   deriving (Eq)
@@ -30,6 +31,7 @@ instance Show Value where
     VUnit -> "()"
     VType t -> prettyType t
     VFunction {} -> "<function>"
+    VArray list -> "[" ++ show list ++ "]"
     VBuiltin n -> "<builtin " ++ n ++ ">"
     VStruct fields -> "struct { " ++ intercalate ", " (map (\(n, v) -> n ++ " = " ++ show v) fields) ++ " }"
     VEmpty -> undefined

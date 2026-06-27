@@ -56,6 +56,8 @@ evalExpr (TypedExpr pos _ kind) = case kind of
       _ -> panicAt pos "attempted to access member of non-struct value" -- value found
   TypedBreakExpr mExpr -> evalBreakExpr pos mExpr
   TypedContinueExpr -> evalContinueExpr pos
+  TypedArrayLit exprs -> evalArrayLit exprs
+  TypedIndexExpr base index -> evalIndexExpr pos base index
 
 evalIfExpr :: AlexPosn -> TypedExpr -> TypedBlock -> Maybe TypedBlock -> Eval Value
 evalIfExpr pos c t mElse = do
@@ -282,6 +284,29 @@ evalBlock (Block stmts expr) = do
   installFunctionItems stmts
   mapM_ evalStmt stmts
   maybe (return VUnit) evalExpr expr
+
+-- Arrays
+
+evalArrayLit :: [TypedExpr] -> Eval Value
+evalArrayLit list = do
+  exprList <- mapM evalExpr list
+  return (VArray exprList) 
+
+evalIndexExpr :: AlexPosn -> TypedExpr -> TypedExpr -> Eval Value
+evalIndexExpr pos base index = do
+  baseExpr <- evalExpr base
+  indexExpr <- evalExpr index
+  haskellIndex <- case indexExpr of
+    VInt _ _ i -> return (fromIntegral i)
+    _ -> panicAt pos  "indexing array with non integer value"
+  
+  case baseExpr of
+    VArray vals ->
+      if haskellIndex < 0 || haskellIndex >= length vals
+        then panicAt pos ("array index out of bounds: index " ++ show haskellIndex ++ " on length " ++ show (length vals))
+        else return (vals !! haskellIndex)
+    _ -> panicAt pos "indxexing non array value"
+
 
 -- Programs
 

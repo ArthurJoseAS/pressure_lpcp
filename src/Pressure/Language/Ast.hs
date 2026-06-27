@@ -1,8 +1,8 @@
 module Pressure.Language.Ast where
 
+import Data.List (intercalate)
 import Pressure.Language.Lexer (AlexPosn (..))
 import Pressure.Language.Types
-import Data.List (intercalate)
 
 newtype Program stmt = Program [TopLevel stmt]
   deriving (Show, Eq)
@@ -75,7 +75,7 @@ data TypedDecl
   deriving (Show, Eq)
 
 -- NOTE : Members cant be assigned
-data ParsedLValue 
+data ParsedLValue
   = ParsedLVar Ident
   | ParsedLAccess ParsedLValue Ident
   deriving (Show, Eq)
@@ -84,7 +84,7 @@ data ParsedAssign
   = ParsedAssign ParsedLValue ParsedExpr
   deriving (Show, Eq)
 
-data TypedLValue 
+data TypedLValue
   = TypedLVar Ident Type
   | TypedLAccess TypedLValue Ident Type
   deriving (Show, Eq)
@@ -120,6 +120,7 @@ data TypeSyntaxKind
   | IntSyntax Sign IntSize
   | FloatSyntax FloatSize
   | FnSyntax [TypeSyntax] TypeSyntax
+  | ArraySyntax TypeSyntax
   | StringSyntax
   | UnitSyntax
   | StructSyntax [StructItem]
@@ -131,7 +132,6 @@ data StructItem
   = StructField Ident TypeSyntax
   | StructMemberDecl ParsedDecl
   deriving (Show, Eq)
-
 
 data ParsedExpr = ParsedExpr
   { parsedExprPos :: AlexPosn,
@@ -156,6 +156,8 @@ data ParsedExprKind
   | ParsedStructInit (Maybe Ident) [ParsedAssign]
   | ParsedMemberAccess ParsedExpr Ident
   | ParsedTypeExpr TypeSyntax
+  | ParsedArrayLit [ParsedExpr]
+  | ParsedIndexExpr ParsedExpr ParsedExpr
   | ParsedBreakExpr ParsedExpr
   | ParsedContinueExpr
   deriving (Show, Eq)
@@ -183,8 +185,8 @@ data TypedExprKind
   | TypedCallExpr TypedExpr [TypedExpr]
   | TypedStructInit (Maybe Ident) [(String, TypedExpr)]
   | TypedMemberAccess TypedExpr Ident
+  | TypedArrayLit [TypedExpr]
+  | TypedIndexExpr TypedExpr TypedExpr
   | TypedBreakExpr TypedExpr
   | TypedContinueExpr
   deriving (Show, Eq)
-
-
