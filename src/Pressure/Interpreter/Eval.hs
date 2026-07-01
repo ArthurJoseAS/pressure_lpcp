@@ -39,6 +39,21 @@ evalExpr (TypedExpr pos _ kind) = case kind of
   TypedWhileExpr c body mElse -> evalWhileExpr pos c body mElse
   TypedFnExpr params ret body -> evalFnExpr params ret body
   TypedCallExpr callee args -> evalCallExpr pos callee args
+  TypedStructInit _ fields -> do
+    evaluatedFields <- mapM (\(name, expr) -> do
+      val <- evalExpr expr -- evaluate field expression (<id> = <expr>)
+      return (name,val)
+      ) fields
+    return $ VStruct evaluatedFields
+  TypedMemberAccess expr fieldId -> do
+    v <- evalExpr expr
+    case v of
+      VStruct fields ->
+        -- fetches the field from the struct
+        case lookup (identName fieldId) fields of
+          Just val -> return val -- value found
+          Nothing -> panicAt pos "field not found in struct value" 
+      _ -> panicAt pos "attempted to access member of non-struct value" -- value found
   TypedBreakExpr mExpr -> evalBreakExpr pos mExpr
   TypedContinueExpr -> evalContinueExpr pos
 
@@ -197,13 +212,44 @@ evalBoolBin _ op va vb = case (va, vb) of
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
   TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident _ name) _ expr)) -> go bindInCurrentScope name expr
-  TypedStmt _ (TypedAssignStmt (TypedAssign name expr)) -> go updateInScope name expr
+  TypedStmt _ (TypedAssignStmt (TypedAssign typedLValue expr)) -> do
+    newVal <- evalExpr expr
+    evalLValueUpdate typedLValue newVal
+    return VUnit
   TypedStmt _ (TypedExprStmt expr) -> evalExpr expr >> return VUnit
   where
     go bind name expr = do
       val <- evalExpr expr
       modify (bind name val)
       return VUnit
+
+evalLValueUpdate :: TypedLValue -> Value -> Eval ()
+evalLValueUpdate (TypedLVar (Ident _ name) _) newVal =
+  modify (updateInScope name newVal)
+evalLValueUpdate (TypedLAccess baseLv (Ident pos name) _) newVal = do
+  baseVal <- evalLValue baseLv
+  case baseVal of
+    VStruct fields -> do
+      let newFields = updateField name newVal fields
+      evalLValueUpdate baseLv (VStruct newFields)
+    _ -> panicAt pos "attempted to assign to field of non-struct value"
+  where
+    -- searches and updates the field
+    updateField _ _ [] = []
+    updateField n val ((fn, fv) : rest)
+      | n == fn   = (fn, val) : rest
+      | otherwise = (fn, fv) : updateField n val rest
+
+evalLValue :: TypedLValue -> Eval Value
+evalLValue (TypedLVar (Ident pos name) _) = evalVarExpr pos name
+evalLValue (TypedLAccess baseLv (Ident pos name) _) = do
+  v <- evalLValue baseLv
+  case v of
+    VStruct fields ->
+      case lookup name fields of
+        Just val -> return val
+        Nothing -> panicAt pos "field not found in struct value"
+    _ -> panicAt pos "attempted to access member of non-struct value"
 
 -- Function items
 
