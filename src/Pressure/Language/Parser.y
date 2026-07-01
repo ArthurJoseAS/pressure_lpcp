@@ -126,13 +126,14 @@ BlockBody : Expr           { Block [] (Just $1) }
           | Stmt           { Block [$1] Nothing }
           | Stmt BlockBody { prependStmt $1 $2 }
 
-Expr : IfExpr        { $1 }
-     | WhileExpr     { $1 }
-     | BreakExpr     { $1 }
-     | ContinueExpr  { $1 }
-     | FnExpr        { $1 }
-     | LogicalOrExpr { $1 }
-     | TypeLitExpr   { ParsedExpr (typePos $1) (ParsedTypeLit $1) }
+Expr : IfExpr         { $1 }
+     | WhileExpr      { $1 }
+     | BreakExpr      { $1 }
+     | ContinueExpr   { $1 }
+     | FnExpr         { $1 }
+     | LogicalOrExpr  { $1 }
+     | StructInitExpr { $1 }
+     | TypeLitExpr    { ParsedExpr (typePos $1) (ParsedTypeLit $1) }
 
 IfExpr : if Expr Block ElseBranch  { ParsedExpr (exprPos $2) (ParsedIfExpr $2 $3 $4) }
 
@@ -189,10 +190,10 @@ UnaryExpr : '-' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NegOp $2
           | '!' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NotOp $2) }
           | CallExpr      { $1 }
 
-CallExpr : AtomExpr            { $1 }
+CallExpr : AtomExpr              { $1 }
          | CallExpr '(' Args ')' { ParsedExpr (exprPos $1) (ParsedCallExpr $1 $3) }
          | CallExpr UnitLit      { ParsedExpr (exprPos $1) (ParsedCallExpr $1 []) }
-         | CallExpr '[' Expr ']'     { ParsedExpr (exprPos $1) (ParsedIndexExpr $1 $3) }
+         | CallExpr '[' Expr ']' { ParsedExpr (exprPos $1) (ParsedIndexExpr $1 $3) }
 
 
 Args : ArgList { $1 }
@@ -206,14 +207,11 @@ AtomExpr : INT_LITERAL     { toIntLit $1 }
          | STRING_LITERAL  { toStringLit $1 }
          | true            { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
          | false           { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
-         | ArrayLit       { $1 }
+         | ArrayLit        { $1 }
          | '(' Expr ')'    { $2 }
          | UnitLit         { ParsedExpr (token_posn $1) ParsedUnitLit }
          | ID              { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
-         | StructInitExpr  { $1 }
          | AtomExpr '.' ID { ParsedExpr (exprPos $1) (ParsedMemberAccess $1 (toIdent $3)) }
-         | TypeLit         { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
-         | StructType      { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
          | BUILTIN_ID      { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
 
 ArrayLit : '[' Args ']'   { ParsedExpr (token_posn $1) (ParsedArrayLit $2) }
@@ -229,8 +227,10 @@ TypeExpr : FnType     { $1 }
          | StructType { $1 }
          | ID         { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
 
-TypeLitExpr : FnType  { $1 }
-            | TypeLit { $1 }
+TypeLitExpr : FnType     { $1 }
+            | ArrType    { $1 }
+            | TypeLit    { $1 }
+            | StructType { $1 }
 
 FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
        | fn UnitLit '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $4) }
@@ -271,10 +271,9 @@ StructItem : StructField ','  { [$1] }
 
 StructField : ID ':' TypeExpr { StructField (toIdent $1) $3 }
 
-StructRef : '.'  { (token_posn $1, Nothing) }
-          | ID   { (token_posn $1, Just (toIdent $1)) }
 
-StructInitExpr : StructRef '{' StructInitItems '}' { ParsedExpr (fst $1) (ParsedStructInit (snd $1) $3) }
+StructInitExpr : '.' '{' StructInitItems '}' { ParsedExpr (token_posn $1) (ParsedStructInit Nothing $3) }
+               | ID '{' StructInitItems '}'  { ParsedExpr (token_posn $1) (ParsedStructInit (Just (toIdent $1)) $3) }
 
 StructInitItems : StructInitItemList     { $1 }
                 | StructInitItemList ',' { $1 }
