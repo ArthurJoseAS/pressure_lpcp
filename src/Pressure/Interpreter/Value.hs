@@ -1,5 +1,6 @@
 module Pressure.Interpreter.Value where
 
+import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import Pressure.Language.Ast (TypedBlock, TypedParam)
 import Pressure.Language.Types
@@ -16,6 +17,7 @@ data Value
   | VEmpty
   | VFunction [TypedParam] Type TypedBlock ValueEnv
   | VBuiltin String
+  | VStruct [(String, Value)]
   deriving (Eq)
 
 instance Show Value where
@@ -29,4 +31,5 @@ instance Show Value where
     VType t -> prettyType t
     VFunction {} -> "<function>"
     VBuiltin n -> "<builtin " ++ n ++ ">"
+    VStruct fields -> "struct { " ++ intercalate ", " (map (\(n, v) -> n ++ " = " ++ show v) fields) ++ " }"
     VEmpty -> undefined
