@@ -74,12 +74,23 @@ data TypedDecl
   = TypedValueDecl Mutability Ident Type TypedExpr
   deriving (Show, Eq)
 
+-- NOTE : Members cant be assigned
+data ParsedLValue 
+  = ParsedLVar Ident
+  | ParsedLAccess ParsedLValue Ident
+  deriving (Show, Eq)
+
 data ParsedAssign
-  = ParsedAssign Ident ParsedExpr
+  = ParsedAssign ParsedLValue ParsedExpr
+  deriving (Show, Eq)
+
+data TypedLValue 
+  = TypedLVar Ident Type
+  | TypedLAccess TypedLValue Ident Type
   deriving (Show, Eq)
 
 data TypedAssign
-  = TypedAssign String TypedExpr
+  = TypedAssign TypedLValue TypedExpr
   deriving (Show, Eq)
 
 data Param = Param Ident TypeSyntax
@@ -142,10 +153,8 @@ data ParsedExprKind
   | ParsedWhileExpr ParsedExpr ParsedBlock (Maybe ParsedBlock)
   | ParsedFnExpr [Param] TypeSyntax ParsedBlock
   | ParsedCallExpr ParsedExpr [ParsedExpr]
-  -- Maybe to support anonymous structs
   | ParsedStructInit (Maybe Ident) [ParsedAssign]
   | ParsedMemberAccess ParsedExpr Ident
-  -- NOTE : Since all types are first class citizens, expressions should generate them
   | ParsedTypeExpr TypeSyntax
   | ParsedBreakExpr ParsedExpr
   | ParsedContinueExpr

@@ -176,7 +176,7 @@ checkDuplicateInitFields :: [ParsedAssign] -> Check ()
 checkDuplicateInitFields = go []
   where
     go _ [] = return ()
-    go seen (ParsedAssign (Ident pos name) _ : rest)
+    go seen (ParsedAssign (ParsedLVar (Ident pos name)) _ : rest)
       | name `elem` seen = liftEither $ Left $ DuplicateDeclaration pos name
       | otherwise = go (name : seen) rest
 
@@ -204,12 +204,12 @@ checkStructInit pos mName fields = do
   where
     -- atributes a type to a field. Used in anonymous structs
     typecheckField :: ParsedAssign -> Check (String, TypedExpr)
-    typecheckField (ParsedAssign (Ident _ name) expr) = do
+    typecheckField (ParsedAssign (ParsedLVar (Ident _ name)) expr) = do
       te <- checkExprM expr
       return (name, te)
     -- types the field AND validates it with the struct's definiton.
     typecheckNamedField :: [(String, Type)] -> ParsedAssign -> Check (String, TypedExpr)
-    typecheckNamedField declaredFields (ParsedAssign (Ident fieldPos name) expr) =
+    typecheckNamedField declaredFields (ParsedAssign (ParsedLVar (Ident fieldPos name)) expr) =
       case lookup name declaredFields of
         Nothing ->
           liftEither $ Left $ UndefinedVariable fieldPos name
@@ -490,16 +490,50 @@ checkDecl (ParsedValueDecl mut ident mTs expr) = do
   bindIdent ident typeToBind mut
   return $ TypedValueDecl mut ident typeToBind te
 
-checkAssign :: ParsedAssign -> Check TypedAssign
-checkAssign (ParsedAssign (Ident pos name) expr) = do
+typeOfLValue :: TypedLValue -> Type
+typeOfLValue (TypedLVar _ t) = t
+typeOfLValue (TypedLAccess _ _ t) = t
+
+lValuePos :: ParsedLValue -> AlexPosn
+lValuePos (ParsedLVar (Ident pos _)) = pos
+lValuePos (ParsedLAccess lv _) = lValuePos lv
+
+getLValueName :: ParsedLValue -> String
+getLValueName (ParsedLVar (Ident _ name)) = name
+getLValueName (ParsedLAccess lv (Ident _ name)) = getLValueName lv ++ "." ++ name
+
+checkLValue :: ParsedLValue -> Check (TypedLValue, Mutability)
+checkLValue (ParsedLVar ident@(Ident pos name)) = do
   env <- getEnv
   case lookupName name env of
+    Just (typ, mut) -> return (TypedLVar ident typ, mut)
     Nothing -> liftEither $ Left $ UndefinedVariable pos name
-    Just (_, Constant) -> liftEither $ Left $ AssignToConstant pos name
-    Just (varT, Mutable) -> do
-      typedExpr <- checkExprM expr
-      unless (compatible varT (typeOf typedExpr)) $ liftEither $ Left $ TypeMismatch pos varT (typeOf typedExpr)
-      return $ TypedAssign name typedExpr
+checkLValue (ParsedLAccess lv fieldIdent@(Ident fieldPos fieldName)) = do
+  (typedLv, _) <- checkLValue lv
+  case typeOfLValue typedLv of
+    StructT fields members ->
+      case lookup fieldName fields of
+        Just fieldType -> return (TypedLAccess typedLv fieldIdent fieldType, Mutable)
+        Nothing ->
+          case lookup fieldName members of -- if its a field
+            Just (_, _) -> liftEither $ Left $ AssignToConstant fieldPos fieldName
+            Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName -- hasnt even been defined
+    other -> liftEither $ Left $ TypeMismatch fieldPos (StructT [] []) other -- not a struct
+
+checkAssign :: ParsedAssign -> Check TypedAssign
+checkAssign (ParsedAssign lValue expr) = do
+  (typedLValue, mut) <- checkLValue lValue
+  let expectedType = typeOfLValue typedLValue
+  let pos = lValuePos lValue
+  when (mut == Constant) $ do
+    liftEither $ Left $ AssignToConstant pos (getLValueName lValue)
+  typedExpr <- checkExprM expr
+  let inferredType = typeOf typedExpr
+  unless (compatible expectedType inferredType) $
+    liftEither $ Left $ TypeMismatch pos expectedType inferredType
+  return $ TypedAssign typedLValue typedExpr
+
+  
 
 bindIdent :: Ident -> Type -> Mutability -> Check ()
 bindIdent (Ident pos name) typ mut = do
