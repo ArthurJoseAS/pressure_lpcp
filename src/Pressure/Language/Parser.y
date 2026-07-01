@@ -132,7 +132,6 @@ Expr : IfExpr         { $1 }
      | ContinueExpr   { $1 }
      | FnExpr         { $1 }
      | LogicalOrExpr  { $1 }
-     | StructInitExpr { $1 }
      | TypeLitExpr    { ParsedExpr (typePos $1) (ParsedTypeLit $1) }
 
 IfExpr : if Expr Block ElseBranch  { ParsedExpr (exprPos $2) (ParsedIfExpr $2 $3 $4) }
@@ -208,6 +207,7 @@ AtomExpr : INT_LITERAL     { toIntLit $1 }
          | true            { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
          | false           { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
          | ArrayLit        { $1 }
+         | StructInitExpr  { $1 }
          | '(' Expr ')'    { $2 }
          | UnitLit         { ParsedExpr (token_posn $1) ParsedUnitLit }
          | ID              { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }

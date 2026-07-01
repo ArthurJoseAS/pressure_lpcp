@@ -485,7 +485,7 @@ checkFunctionItemStmt stmt = checkStmtM stmt
 
 checkDecl :: ParsedDecl -> Check TypedDecl
 -- if rhs is a struct type expression
-checkDecl (ParsedValueDecl mut ident mTs (ParsedExpr exprPos (ParsedTypeExpr (TypeSyntax _ (StructSyntax structItems))))) = do
+checkDecl (ParsedValueDecl mut ident mTs (ParsedExpr exprPos (ParsedTypeLit (TypeSyntax _ (StructSyntax structItems))))) = do
   let structName = identName ident
   env <- getEnv
   case lookupName structName env of -- avoids infinite recursion with recursive types and subprogram definitions
@@ -617,7 +617,7 @@ structDecls stmts = mapMaybe extractStructDecl stmts
 
     isStructValueDecl (ParsedValueDecl _ _ _ expr) = isStructExpr expr
 
-    isStructExpr (ParsedExpr _ (ParsedTypeExpr (TypeSyntax _ (StructSyntax _)))) = True
+    isStructExpr (ParsedExpr _ (ParsedTypeLit (TypeSyntax _ (StructSyntax _)))) = True
     isStructExpr _ = False
 
 -- Checks duplicate struct definition in the same scope. exits with error if it finds it
