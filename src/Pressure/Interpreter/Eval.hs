@@ -214,9 +214,9 @@ evalBoolBin _ op va vb = case (va, vb) of
 evalStmt :: TypedStmt -> Eval Value
 evalStmt = \case
   TypedStmt _ (TypedDeclStmt (TypedValueDecl _ (Ident _ name) _ expr)) -> go bindInCurrentScope name expr
-  TypedStmt _ (TypedAssignStmt (TypedAssign typedLValue expr)) -> do
+  TypedStmt _ (TypedAssignStmt (TypedAssign lhs expr)) -> do
     newVal <- evalExpr expr
-    evalLValueUpdate typedLValue newVal
+    evalLValueUpdate lhs newVal
     return VUnit
   TypedStmt _ (TypedExprStmt expr) -> evalExpr expr >> return VUnit
   where
@@ -225,33 +225,54 @@ evalStmt = \case
       modify (bind name val)
       return VUnit
 
-evalLValueUpdate :: TypedLValue -> Value -> Eval ()
-evalLValueUpdate (TypedLVar (Ident _ name) _) newVal =
-  modify (updateInScope name newVal)
-evalLValueUpdate (TypedLAccess baseLv (Ident pos name) _) newVal = do
-  baseVal <- evalLValue baseLv
-  case baseVal of
-    VStruct fields -> do
-      let newFields = updateField name newVal fields
-      evalLValueUpdate baseLv (VStruct newFields)
-    _ -> panicAt pos "attempted to assign to field of non-struct value"
-  where
-    -- searches and updates the field
-    updateField _ _ [] = []
-    updateField n val ((fn, fv) : rest)
-      | n == fn   = (fn, val) : rest
-      | otherwise = (fn, fv) : updateField n val rest
+evalLValueUpdate :: TypedExpr -> Value -> Eval ()
+evalLValueUpdate lhs newVal = case typedExprKind lhs of
+  TypedVarExpr (Ident _ name) ->
+    modify (updateInScope name newVal)
+  TypedMemberAccess base (Ident pos name) -> do
+    baseVal <- evalLValue base
+    case baseVal of
+      VStruct fields -> do
+        let newFields =
+              map (\(n, v) -> if n == name then (n, newVal) else (n, v)) fields
+        evalLValueUpdate base (VStruct newFields)
+      _ -> panicAt pos "attempted to assign to field of non-struct value"
+  TypedIndexExpr base idx -> do
+    baseVal <- evalLValue base
+    idxVal <- evalExpr idx
+    case (baseVal, idxVal) of
+      (VArray vals, VInt _ _ i) -> do
+        let hi = fromIntegral i
+        if hi < 0 || hi >= length vals
+          then panicAt (typedExprPos lhs) "array index out of bounds"
+          else do
+            let newVals = take hi vals ++ [newVal] ++ drop (hi + 1) vals
+            evalLValueUpdate base (VArray newVals)
+      _ -> panicAt (typedExprPos lhs) "attempted to index non-array value"
+  _ -> panicAt (typedExprPos lhs) "invalid assignment target in evaluator"
 
-evalLValue :: TypedLValue -> Eval Value
-evalLValue (TypedLVar (Ident pos name) _) = evalVarExpr pos name
-evalLValue (TypedLAccess baseLv (Ident pos name) _) = do
-  v <- evalLValue baseLv
-  case v of
-    VStruct fields ->
-      case lookup name fields of
-        Just val -> return val
-        Nothing -> panicAt pos "field not found in struct value"
-    _ -> panicAt pos "attempted to access member of non-struct value"
+evalLValue :: TypedExpr -> Eval Value
+evalLValue expr = case typedExprKind expr of
+  TypedVarExpr (Ident pos name) -> evalVarExpr pos name
+  TypedMemberAccess base (Ident pos name) -> do
+    v <- evalLValue base
+    case v of
+      VStruct fields ->
+        case lookup name fields of
+          Just val -> return val
+          Nothing -> panicAt pos "field not found in struct value"
+      _ -> panicAt pos "attempted to access member of non-struct value"
+  TypedIndexExpr base idx -> do
+    v <- evalLValue base
+    idxVal <- evalExpr idx
+    case (v, idxVal) of
+      (VArray vals, VInt _ _ i) -> do
+        let hi = fromIntegral i
+        if hi < 0 || hi >= length vals
+          then panicAt (typedExprPos expr) "array index out of bounds"
+          else return (vals !! hi)
+      _ -> panicAt (typedExprPos expr) "attempted to index non-array value"
+  _ -> evalExpr expr
 
 -- Function items
 

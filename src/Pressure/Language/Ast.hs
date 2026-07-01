@@ -1,6 +1,5 @@
 module Pressure.Language.Ast where
 
-import Data.List (intercalate)
 import Pressure.Language.Lexer (AlexPosn (..))
 import Pressure.Language.Types
 
@@ -74,23 +73,12 @@ data TypedDecl
   = TypedValueDecl Mutability Ident Type TypedExpr
   deriving (Show, Eq)
 
--- NOTE : Members cant be assigned
-data ParsedLValue
-  = ParsedLVar Ident
-  | ParsedLAccess ParsedLValue Ident
-  deriving (Show, Eq)
-
 data ParsedAssign
-  = ParsedAssign ParsedLValue ParsedExpr
-  deriving (Show, Eq)
-
-data TypedLValue
-  = TypedLVar Ident Type
-  | TypedLAccess TypedLValue Ident Type
+  = ParsedAssign ParsedExpr ParsedExpr
   deriving (Show, Eq)
 
 data TypedAssign
-  = TypedAssign TypedLValue TypedExpr
+  = TypedAssign TypedExpr TypedExpr
   deriving (Show, Eq)
 
 data Param = Param Ident TypeSyntax
