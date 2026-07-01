@@ -22,6 +22,7 @@ data Type
   | StringT
   | UnitT
   | TypeT
+  | StructT [(String, Type)] [(String, (Type, Mutability))]
   | AnyTypeT
   deriving (Show, Eq)
 
@@ -43,6 +44,7 @@ prettyType = \case
   UnitT -> "unit"
   TypeT -> "type"
   AnyTypeT -> "anytype"
+  StructT fields _ -> "struct { " ++ intercalate ", " (map (\(n, t) -> n ++ ": " ++ prettyType t) fields) ++ " }"
 
 data UnaryOp
   = NegOp
