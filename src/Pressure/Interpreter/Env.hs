@@ -24,6 +24,16 @@ asNumber = \case
   VFloat k f -> Just (RuntimeFloat k f)
   _ -> Nothing
 
+defaultValue :: Type -> Value
+defaultValue = \case
+  IntT s k -> VInt s k 0
+  FloatT k -> VFloat k 0
+  BoolT -> VBool False
+  FnT _ _ -> VEmpty
+  UnitT -> VUnit
+  -- Recursively calls defaultValue for each field. Ignores constants
+  StructT fields _ -> VStruct (map (\(name, fieldType) -> (name , defaultValue fieldType)) fields)
+
 withNumbers :: AlexPosn -> (RuntimeNumber -> RuntimeNumber -> m Value) -> Value -> Value -> m Value
 withNumbers pos f va vb =
   case (asNumber va, asNumber vb) of

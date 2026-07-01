@@ -108,11 +108,11 @@ Stmt : AssignStmt ';'  { ParsedStmt (assignPos $1) (ParsedAssignStmt $1) }
      | ValueDecl ';'   { ParsedStmt (declPos $1) (ParsedDeclStmt $1) }
      | Expr ';'        { ParsedStmt (exprPos $1) (ParsedExprStmt $1) }
 
-AssignStmt : ID '=' Expr  { ParsedAssign (toIdent $1) $3 }
-           | ID '+=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr AddOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
-           | ID '-=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
-           | ID '*=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
-           | ID '/=' Expr { ParsedAssign (toIdent $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp (ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1))) $3)) }
+AssignStmt : Expr '=' Expr  { ParsedAssign (exprToLValue $1) $3 }
+           | Expr '+=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr AddOp $1 $3)) }
+           | Expr '-=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp $1 $3)) }
+           | Expr '*=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp $1 $3)) }
+           | Expr '/=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp $1 $3)) }
 
 ValueDecl : ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 $5 }
           | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 $5 }
@@ -199,15 +199,19 @@ Args : ArgList { $1 }
 ArgList : Expr             { [$1] }
         | Expr ',' ArgList { $1 : $3 }
 
-AtomExpr : INT_LITERAL    { toIntLit $1 }
-         | FLOAT_LITERAL  { toFloatLit $1 }
-         | STRING_LITERAL { toStringLit $1 }
-         | true           { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
-         | false          { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
-         | '(' Expr ')'   { $2 }
-         | UnitLit        { ParsedExpr (token_posn $1) ParsedUnitLit }
-         | ID             { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
-         | BUILTIN_ID     { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
+AtomExpr : INT_LITERAL     { toIntLit $1 }
+         | FLOAT_LITERAL   { toFloatLit $1 }
+         | STRING_LITERAL  { toStringLit $1 }
+         | true            { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
+         | false           { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
+         | '(' Expr ')'    { $2 }
+         | UnitLit         { ParsedExpr (token_posn $1) ParsedUnitLit }
+         | ID              { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
+         | StructInitExpr  { $1 }
+         | AtomExpr '.' ID { ParsedExpr (exprPos $1) (ParsedMemberAccess $1 (toIdent $3)) }
+         | TypeLit         { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
+         | StructType      { ParsedExpr (typePos $1) (ParsedTypeExpr $1) }
+         | BUILTIN_ID      { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
 
 
 {- types -}
@@ -215,9 +219,10 @@ AtomExpr : INT_LITERAL    { toIntLit $1 }
 OptType : TypeExpr { Just $1 }
         |          { Nothing }
 
-TypeExpr : FnType   { $1 }
-         | TypeLit  { $1 }
-         | ID       { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
+TypeExpr : FnType     { $1 }
+         | TypeLit    { $1 }
+         | StructType { $1 }
+         | ID         { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
 
 TypeLitExpr : FnType  { $1 }
             | TypeLit { $1 }
@@ -247,6 +252,31 @@ TypeLit : type    { TypeSyntax (token_posn $1) TySyntax }
         | u64     { TypeSyntax (token_posn $1) (IntSyntax Unsigned I64) }
         | f32     { TypeSyntax (token_posn $1) (FloatSyntax F32) }
         | f64     { TypeSyntax (token_posn $1) (FloatSyntax F64) }
+
+StructType : struct '{' StructItems '}' { TypeSyntax (token_posn $1) (StructSyntax $3) }
+
+StructItems : StructItem StructItems { $1 ++ $2 }
+            |                        { [] }
+
+StructItem : StructField ','  { [$1] }
+           | StructField      { [$1] }
+           | ValueDecl ';'    { [StructMemberDecl $1] }
+
+StructField : ID ':' TypeExpr { StructField (toIdent $1) $3 }
+
+StructRef : '.'  { (token_posn $1, Nothing) }
+          | ID   { (token_posn $1, Just (toIdent $1)) }
+
+StructInitExpr : StructRef '{' StructInitItems '}' { ParsedExpr (fst $1) (ParsedStructInit (snd $1) $3) }
+
+StructInitItems : StructInitItemList     { $1 }
+                | StructInitItemList ',' { $1 }
+                |                        { [] }
+
+StructInitItemList : StructInitItem ',' StructInitItemList { $1 : $3 }
+                   | StructInitItem                        { [$1] }
+
+StructInitItem : ID '=' Expr { ParsedAssign (ParsedLVar (toIdent $1)) $3 }
 
 {
 parseError :: Token -> Alex a
@@ -287,13 +317,22 @@ toStringLit (StringLiteral pos value) = ParsedExpr pos (ParsedStringLit value)
 toStringLit _ = error "internal parser error: expected string literal"
 
 assignPos :: ParsedAssign -> AlexPosn
-assignPos (ParsedAssign (Ident pos _) _) = pos
+assignPos (ParsedAssign lVal _) = lValPos lVal
+
+lValPos :: ParsedLValue -> AlexPosn
+lValPos (ParsedLVar (Ident pos _)) = pos
+lValPos (ParsedLAccess lv _) = lValPos lv
 
 declPos :: ParsedDecl -> AlexPosn
 declPos (ParsedValueDecl _ (Ident pos _) _ _) = pos
 
 exprPos :: ParsedExpr -> AlexPosn
 exprPos (ParsedExpr pos _) = pos
+
+exprToLValue :: ParsedExpr -> ParsedLValue
+exprToLValue (ParsedExpr _ (ParsedVarExpr ident)) = ParsedLVar ident
+exprToLValue (ParsedExpr _ (ParsedMemberAccess expr ident)) = ParsedLAccess (exprToLValue expr) ident
+exprToLValue (ParsedExpr pos _) = error "invalid l-value"
 
 prependStmt :: ParsedStmt -> ParsedBlock -> ParsedBlock
 prependStmt stmt (Block stmts expr) = Block (stmt : stmts) expr
