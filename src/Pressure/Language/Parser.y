@@ -108,14 +108,11 @@ Stmt : AssignStmt ';'  { ParsedStmt (assignPos $1) (ParsedAssignStmt $1) }
      | ValueDecl ';'   { ParsedStmt (declPos $1) (ParsedDeclStmt $1) }
      | Expr ';'        { ParsedStmt (exprPos $1) (ParsedExprStmt $1) }
 
-LValue : ID {ParsedLVar (toIdent $1)}
-       | LValue '.' ID {ParsedLAccess $1 (toIdent $3)}
-
-AssignStmt : LValue '=' Expr  { ParsedAssign $1 $3 }
-           | LValue '+=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr AddOp (lValueToExpr $1) $3)) }
-           | LValue '-=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp (lValueToExpr $1) $3)) }
-           | LValue '*=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp (lValueToExpr $1) $3)) }
-           | LValue '/=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp (lValueToExpr $1) $3)) }
+AssignStmt : Expr '=' Expr  { ParsedAssign (exprToLValue $1) $3 }
+           | Expr '+=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr AddOp $1 $3)) }
+           | Expr '-=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp $1 $3)) }
+           | Expr '*=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp $1 $3)) }
+           | Expr '/=' Expr { ParsedAssign (exprToLValue $1) (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp $1 $3)) }
 
 ValueDecl : ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 $5 }
           | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 $5 }
@@ -279,7 +276,7 @@ StructInitItems : StructInitItemList     { $1 }
 StructInitItemList : StructInitItem ',' StructInitItemList { $1 : $3 }
                    | StructInitItem                        { [$1] }
 
-StructInitItem : ID '=' Expr { ParsedAssign (toIdent $1) $3 }
+StructInitItem : ID '=' Expr { ParsedAssign (ParsedLVar (toIdent $1)) $3 }
 
 {
 parseError :: Token -> Alex a
@@ -323,7 +320,7 @@ assignPos :: ParsedAssign -> AlexPosn
 assignPos (ParsedAssign lVal _) = lValPos lVal
 
 lValPos :: ParsedLValue -> AlexPosn
-lValPos (ParsedLVar (ident pos _)) = pos
+lValPos (ParsedLVar (Ident pos _)) = pos
 lValPos (ParsedLAccess lv _) = lValPos lv
 
 declPos :: ParsedDecl -> AlexPosn
@@ -332,11 +329,10 @@ declPos (ParsedValueDecl _ (Ident pos _) _ _) = pos
 exprPos :: ParsedExpr -> AlexPosn
 exprPos (ParsedExpr pos _) = pos
 
-lValueToExpr :: ParsedLValue -> ParsedExpr
-lValueToExpr (ParsedLVar ident) = ParsedExpr (identPos ident) (ParsedVarExpr ident)
-lValueToExpr (ParsedLAccess lVal ident) =
-  let expr = lValueToExpr lVal
-  in ParsedExpr (exprPos expr) (ParsedMemberAccess expr ident)
+exprToLValue :: ParsedExpr -> ParsedLValue
+exprToLValue (ParsedExpr _ (ParsedVarExpr ident)) = ParsedLVar ident
+exprToLValue (ParsedExpr _ (ParsedMemberAccess expr ident)) = ParsedLAccess (exprToLValue expr) ident
+exprToLValue (ParsedExpr pos _) = error "invalid l-value"
 
 prependStmt :: ParsedStmt -> ParsedBlock -> ParsedBlock
 prependStmt stmt (Block stmts expr) = Block (stmt : stmts) expr
