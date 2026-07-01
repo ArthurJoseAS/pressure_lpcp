@@ -1,5 +1,6 @@
 module Pressure.BuiltinsTest (builtinsTests) where
 
+import Control.Exception (ErrorCall, SomeException, fromException, throwIO, toException, try)
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State (runStateT)
 import Pressure.Interpreter.Error qualified as Eval
@@ -43,7 +44,25 @@ builtinsTests =
       testCase "@as casts bool to string" testAsBoolToString,
       testCase "@as rejects invalid string to int" testAsInvalidStringToInt,
       testCase "@as rejects cast to anytype" testAsRejectAnyType,
-      testCase "anytype annotation resolves to inferred type" testAnyTypeAnnotation
+      testCase "anytype annotation resolves to inferred type" testAnyTypeAnnotation,
+      testCase "@push accepts valid call" testPushAcceptsValid,
+      testCase "@push appends to empty array" testPushEmptyArray,
+      testCase "@push appends to non-empty array" testPushNonEmptyArray,
+      testCase "@push supports chained use" testPushChained,
+      testCase "@push rejects wrong arity (no value)" testPushRejectsArityNoValue,
+      testCase "@push rejects wrong arity (extra args)" testPushRejectsArityExtra,
+      testCase "@push rejects non-array first arg" testPushRejectsNonArray,
+      testCase "@pop accepts valid call" testPopAcceptsValid,
+      testCase "@pop drops the last element" testPopNonEmptyArray,
+      testCase "@pop on single element yields empty" testPopSingleElement,
+      testCase "@pop on empty array yields empty" testPopEmptyArray,
+      testCase "@pop rejects wrong arity" testPopRejectsArity,
+      testCase "@pop rejects non-array arg" testPopRejectsNonArray,
+      testCase "@printf accepts empty array" testPrintfEmptyArray,
+      testCase "@printf accepts int array" testPrintfIntArray,
+      testCase "@printf accepts bool array" testPrintfBoolArray,
+      testCase "@printf accepts nested array" testPrintfNestedArray,
+      testCase "@printf accepts multiple array args" testPrintfMultipleArrays
     ]
 
 runStdlibEval :: String -> IO (Either Eval.EvalError Value)
@@ -125,6 +144,8 @@ testBuiltinsAvailable = do
   checkOk "builtin read available" "@read();"
   checkOk "builtin printf available" "@printf(\"\");"
   checkOk "builtin as available" "@as(i32, 42);"
+  checkOk "builtin push available" "@push([], 1);"
+  checkOk "builtin pop available" "@pop([]);"
 
 testAsIntToInt :: IO ()
 testAsIntToInt = do
@@ -292,3 +313,170 @@ testAnyTypeAnnotation = do
           Just (VInt Signed I32 42) -> return ()
           other -> error $ "expected x = 42, got " ++ show other
       Left err -> error $ "eval failed: " ++ show err
+
+-- @push
+
+testPushAcceptsValid :: IO ()
+testPushAcceptsValid =
+  checkOk "@push accepts valid call" "x: []i32 = @push([1, 2], 3);"
+
+testPushEmptyArray :: IO ()
+testPushEmptyArray = do
+  withTokens "@push empty array" "x: []i32 = @push([], 1);" $ \ast -> do
+    result <- evalParsed "@push empty array" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VArray [VInt Signed I32 1]) -> return ()
+          other -> error $ "expected VArray [1], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testPushNonEmptyArray :: IO ()
+testPushNonEmptyArray = do
+  withTokens "@push non-empty array" "x: []i32 = @push([1, 2], 3);" $ \ast -> do
+    result <- evalParsed "@push non-empty array" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VArray [VInt Signed I32 1, VInt Signed I32 2, VInt Signed I32 3]) -> return ()
+          other -> error $ "expected VArray [1,2,3], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testPushChained :: IO ()
+testPushChained = do
+  withTokens "@push chained" "arr: []i32 = [1, 2]; arr = @push(arr, 3);" $ \ast -> do
+    result <- evalParsed "@push chained" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "arr" env of
+          Just (VArray [VInt Signed I32 1, VInt Signed I32 2, VInt Signed I32 3]) -> return ()
+          other -> error $ "expected VArray [1,2,3], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+assertBuiltinPanic :: String -> String -> IO ()
+assertBuiltinPanic name source = do
+  ast <- case runAlex source parseRepl of
+    Left err -> error $ name ++ ": parse failed: " ++ err
+    Right ast -> return ast
+  result <- try @SomeException (evalParsed name ast)
+  case result of
+    Right _ ->
+      error $ name ++ ": expected panic during eval but eval succeeded"
+    Left e ->
+      case fromException (toException e) :: Maybe ErrorCall of
+        Just _ -> return ()
+        Nothing -> throwIO e
+
+testPushRejectsArityNoValue :: IO ()
+testPushRejectsArityNoValue =
+  assertBuiltinPanic "@push rejects missing value" "@push([1, 2]);"
+
+testPushRejectsArityExtra :: IO ()
+testPushRejectsArityExtra =
+  assertBuiltinPanic "@push rejects extra args" "@push([1, 2], 3, 4);"
+
+testPushRejectsNonArray :: IO ()
+testPushRejectsNonArray = do
+  ast <- case runAlex "@push(1, 2);" parseRepl of
+    Left err -> error $ "parse failed: " ++ err
+    Right ast -> return ast
+  case TC.checkRepl ast of
+    Right _ -> error "expected type error but type check succeeded"
+    Left (Type.TypeMismatch _ _ _) -> return ()
+    Left other -> error $ "expected TypeMismatch, got " ++ show other
+
+-- @pop
+
+testPopAcceptsValid :: IO ()
+testPopAcceptsValid =
+  checkOk "@pop accepts valid call" "x: []i32 = @pop([1, 2, 3]);"
+
+testPopNonEmptyArray :: IO ()
+testPopNonEmptyArray = do
+  withTokens "@pop non-empty" "x: []i32 = @pop([1, 2, 3]);" $ \ast -> do
+    result <- evalParsed "@pop non-empty" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VArray [VInt Signed I32 1, VInt Signed I32 2]) -> return ()
+          other -> error $ "expected VArray [1,2], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testPopSingleElement :: IO ()
+testPopSingleElement = do
+  withTokens "@pop single" "x: []i32 = @pop([42]);" $ \ast -> do
+    result <- evalParsed "@pop single" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VArray []) -> return ()
+          other -> error $ "expected VArray [], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testPopEmptyArray :: IO ()
+testPopEmptyArray = do
+  withTokens "@pop empty" "x: []i32 = @pop([]);" $ \ast -> do
+    result <- evalParsed "@pop empty" ast
+    case result of
+      Right (_, env) ->
+        case lookupValue "x" env of
+          Just (VArray []) -> return ()
+          other -> error $ "expected VArray [], got " ++ show other
+      Left err -> error $ "eval failed: " ++ show err
+
+testPopRejectsArity :: IO ()
+testPopRejectsArity = do
+  assertBuiltinPanic "@pop rejects extra arg" "@pop([1, 2], 1);"
+  assertBuiltinPanic "@pop rejects no arg" "@pop();"
+
+testPopRejectsNonArray :: IO ()
+testPopRejectsNonArray = do
+  ast <- case runAlex "@pop(42);" parseRepl of
+    Left err -> error $ "parse failed: " ++ err
+    Right ast -> return ast
+  case TC.checkRepl ast of
+    Right _ -> error "expected type error but type check succeeded"
+    Left (Type.TypeMismatch _ _ _) -> return ()
+    Left other -> error $ "expected TypeMismatch, got " ++ show other
+
+-- @printf on arrays
+
+testPrintfEmptyArray :: IO ()
+testPrintfEmptyArray = do
+  result <- runStdlibEval "@printf(\"{}\", []);"
+  case result of
+    Right VUnit -> return ()
+    Right v -> error $ "expected VUnit, got " ++ show v
+    Left err -> error $ "eval failed: " ++ show err
+
+testPrintfIntArray :: IO ()
+testPrintfIntArray = do
+  result <- runStdlibEval "@printf(\"{}\", [1, 2, 3]);"
+  case result of
+    Right VUnit -> return ()
+    Right v -> error $ "expected VUnit, got " ++ show v
+    Left err -> error $ "eval failed: " ++ show err
+
+testPrintfBoolArray :: IO ()
+testPrintfBoolArray = do
+  result <- runStdlibEval "@printf(\"{}\", [true, false]);"
+  case result of
+    Right VUnit -> return ()
+    Right v -> error $ "expected VUnit, got " ++ show v
+    Left err -> error $ "eval failed: " ++ show err
+
+testPrintfNestedArray :: IO ()
+testPrintfNestedArray = do
+  result <- runStdlibEval "@printf(\"{}\", [[1, 2], [3]]);"
+  case result of
+    Right VUnit -> return ()
+    Right v -> error $ "expected VUnit, got " ++ show v
+    Left err -> error $ "eval failed: " ++ show err
+
+testPrintfMultipleArrays :: IO ()
+testPrintfMultipleArrays = do
+  result <- runStdlibEval "@printf(\"{} {}\", [1, 2], [3, 4]);"
+  case result of
+    Right VUnit -> return ()
+    Right v -> error $ "expected VUnit, got " ++ show v
+    Left err -> error $ "eval failed: " ++ show err

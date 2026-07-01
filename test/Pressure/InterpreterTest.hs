@@ -1,6 +1,7 @@
 module Pressure.InterpreterTest (interpreterTests) where
 
 import Pressure.Interpreter.ArithTest (arithTests)
+import Pressure.Interpreter.ArrayTest (arrayTests)
 import Pressure.Interpreter.AssignTest (assignTests)
 import Pressure.Interpreter.ControlTest (controlTests)
 import Pressure.Interpreter.ErrorTest (errorTests)
@@ -19,5 +20,6 @@ interpreterTests =
       errorTests,
       controlTests,
       functionTests,
-      programTests
+      programTests,
+      arrayTests
     ]
