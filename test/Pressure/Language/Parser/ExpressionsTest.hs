@@ -23,7 +23,14 @@ parserExpressionTests =
       testCase "parses unary not" testParseUnaryNot,
       testCase "parses unary ampersand" testParseUnaryAmpersand,
       testCase "parses unary precedence" testParseUnaryPrecedence,
-      testCase "parses call expression" testParseCallExpr
+      testCase "parses call expression" testParseCallExpr,
+      testCase "parses empty array literal" testParseEmptyArrayLit,
+      testCase "parses non-empty array literal" testParseNonEmptyArrayLit,
+      testCase "parses array type" testParseArrayType,
+      testCase "parses index expression" testParseIndexExpr,
+      testCase "parses index on literal" testParseIndexOnLiteral,
+      testCase "parses nested array literal" testParseNestedArrayLit,
+      testCase "parses array of strings" testParseArrayOfStrings
     ]
 
 testParseAdditionExpr :: IO ()
@@ -95,3 +102,113 @@ testParseCallExpr :: IO ()
 testParseCallExpr = do
   ast <- parse "parse call expression" "add(1, 2);"
   expect "call expression" (case singleExpr ast of Just (ParsedExpr _ (ParsedCallExpr (ParsedExpr _ (ParsedVarExpr (Ident _ "add"))) [ParsedExpr _ (ParsedIntLit 1), ParsedExpr _ (ParsedIntLit 2)])) -> True; _ -> False) ast
+
+isArrayLit :: [ParsedExpr -> Bool] -> ParsedExpr -> Bool
+isArrayLit matchers = \case
+  ParsedExpr _ (ParsedArrayLit elems) ->
+    length matchers == length elems
+      && and (zipWith (\m e -> m e) matchers elems)
+  _ -> False
+
+isArrayLitOf :: [Integer] -> ParsedExpr -> Bool
+isArrayLitOf expected = \case
+  ParsedExpr _ (ParsedArrayLit elems) ->
+    length expected == length elems
+      && and (zipWith (\(ParsedExpr _ (ParsedIntLit e)) n -> e == n) elems expected)
+  _ -> False
+
+isIndexExpr :: (ParsedExpr -> Bool) -> (ParsedExpr -> Bool) -> ParsedExpr -> Bool
+isIndexExpr base index = \case
+  ParsedExpr _ (ParsedIndexExpr b i) -> base b && index i
+  _ -> False
+
+isStringLit :: String -> ParsedExpr -> Bool
+isStringLit expected = \case
+  ParsedExpr _ (ParsedStringLit actual) -> expected == actual
+  _ -> False
+
+isArrayType :: (TypeSyntax -> Bool) -> TypeSyntax -> Bool
+isArrayType matchInner (TypeSyntax _ (ArraySyntax inner)) = matchInner inner
+isArrayType _ _ = False
+
+isIntType :: TypeSyntax -> Bool
+isIntType (TypeSyntax _ (IntSyntax _ _)) = True
+isIntType _ = False
+
+testParseEmptyArrayLit :: IO ()
+testParseEmptyArrayLit = do
+  ast <- parse "parse empty array literal" "[];"
+  expect "empty array literal" (case singleExpr ast of Just e -> isArrayLit [] e; _ -> False) ast
+
+testParseNonEmptyArrayLit :: IO ()
+testParseNonEmptyArrayLit = do
+  ast <- parse "parse non-empty array literal" "[1, 2, 3];"
+  expect "non-empty array literal" (case singleExpr ast of Just e -> isArrayLitOf [1, 2, 3] e; _ -> False) ast
+
+testParseArrayType :: IO ()
+testParseArrayType = do
+  ast <- parse "parse array type" "x: []i32 = [];"
+  expect
+    "array type"
+    ( case singleDecl ast of
+        Just (ParsedValueDecl Mutable _ (Just typ) _) -> isArrayType isIntType typ
+        _ -> False
+    )
+    ast
+
+testParseIndexExpr :: IO ()
+testParseIndexExpr = do
+  ast <- parse "parse index expression" "arr[0];"
+  expect
+    "index expression"
+    ( case singleExpr ast of
+        Just e ->
+          isIndexExpr
+            ( \b -> case b of
+                ParsedExpr _ (ParsedVarExpr (Ident _ "arr")) -> True
+                _ -> False
+            )
+            (isIntLit 0)
+            e
+        _ -> False
+    )
+    ast
+
+testParseIndexOnLiteral :: IO ()
+testParseIndexOnLiteral = do
+  ast <- parse "parse index on literal" "[1, 2, 3][1];"
+  expect
+    "index on literal"
+    ( case singleExpr ast of
+        Just e ->
+          isIndexExpr
+            (isArrayLitOf [1, 2, 3])
+            (isIntLit 1)
+            e
+        _ -> False
+    )
+    ast
+
+testParseNestedArrayLit :: IO ()
+testParseNestedArrayLit = do
+  ast <- parse "parse nested array literal" "[[1, 2], [3, 4]];"
+  expect
+    "nested array literal"
+    ( case singleExpr ast of
+        Just e ->
+          isArrayLit [isArrayLitOf [1, 2], isArrayLitOf [3, 4]] e
+        _ -> False
+    )
+    ast
+
+testParseArrayOfStrings :: IO ()
+testParseArrayOfStrings = do
+  ast <- parse "parse array of strings" "[\"a\", \"b\"];"
+  expect
+    "array of strings"
+    ( case singleExpr ast of
+        Just e ->
+          isArrayLit [isStringLit "a", isStringLit "b"] e
+        _ -> False
+    )
+    ast

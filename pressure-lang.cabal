@@ -125,6 +125,7 @@ test-suite pressure-lang-test
   other-modules:
     Pressure.BuiltinsTest
     Pressure.Interpreter.ArithTest
+    Pressure.Interpreter.ArrayTest
     Pressure.Interpreter.AssignTest
     Pressure.Interpreter.ControlTest
     Pressure.Interpreter.ErrorTest
@@ -141,6 +142,7 @@ test-suite pressure-lang-test
     Pressure.Language.ParserTest
     Pressure.TestUtil
     Pressure.Typechecker.ArithTest
+    Pressure.Typechecker.ArrayTest
     Pressure.Typechecker.AssignTest
     Pressure.Typechecker.ControlTest
     Pressure.Typechecker.ErrorTest

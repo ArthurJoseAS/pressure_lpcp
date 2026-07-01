@@ -1,6 +1,7 @@
 module Pressure.TypecheckerTest (typeTests) where
 
 import Pressure.Typechecker.ArithTest (arithTypeTests)
+import Pressure.Typechecker.ArrayTest (arrayTypeTests)
 import Pressure.Typechecker.AssignTest (assignTypeTests)
 import Pressure.Typechecker.ControlTest (controlTypeTests)
 import Pressure.Typechecker.ErrorTest (errorTypeTests)
@@ -19,5 +20,6 @@ typeTests =
       errorTypeTests,
       controlTypeTests,
       functionTypeTests,
-      structTypeTests
+      structTypeTests,
+      arrayTypeTests
     ]
