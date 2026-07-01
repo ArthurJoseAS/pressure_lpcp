@@ -106,3 +106,15 @@ testStructTypes = do
   -- 19. Function referencing a struct type defined in same scope (after the function)
   assertOk "function referencing struct type defined later in the same scope" $
     checkSource "f :: fn(s: MyStruct) -> i32 { s.x }; MyStruct :: struct { x: i32 };"
+
+  -- 20. Assigning to field of constant struct is permitted
+  assertOk "assigning to a field of a constant struct is permitted" $
+    checkSource "MyStruct :: struct { x: i32 }; main :: fn() { s : MyStruct : .{ x = 1 }; s.x = 2; };"
+
+  -- 21. Reassigning a constant struct variable is rejected
+  assertLeft "reassigning a constant struct variable is rejected" $
+    checkSource "MyStruct :: struct { x: i32 }; main :: fn() { s : MyStruct : .{ x = 1 }; s = MyStruct { x = 2 }; };"
+
+  -- 22. Assigning to a struct constant member is rejected
+  assertLeft "assigning to a struct constant member is rejected" $
+    checkSource "MyStruct :: struct { x: i32, CONSTANTE :: 42; }; main :: fn() { s := MyStruct { x = 1 }; s.CONSTANTE = 43; };"
