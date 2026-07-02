@@ -131,6 +131,7 @@ test-suite pressure-lang-test
     Pressure.Interpreter.ErrorTest
     Pressure.Interpreter.FunctionTest
     Pressure.Interpreter.LiteralTest
+    Pressure.Interpreter.PointerTest
     Pressure.Interpreter.ProgramTest
     Pressure.InterpreterTest
     Pressure.Language.LexerTest
@@ -148,6 +149,7 @@ test-suite pressure-lang-test
     Pressure.Typechecker.ErrorTest
     Pressure.Typechecker.FunctionTest
     Pressure.Typechecker.LiteralTest
+    Pressure.Typechecker.PointerTest
     Pressure.Typechecker.StructTest
     Pressure.TypecheckerTest
 

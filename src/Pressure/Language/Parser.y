@@ -28,6 +28,7 @@ import Pressure.Language.Types
   int            { KwInt _ }
   uint           { KwUint _ }
   float          { KwFloat _ }
+  mut            { KwMut _ }
   bool           { KwBool _ }
   string         { KwString _ }
   unit           { KwUnit _ }
@@ -55,6 +56,7 @@ import Pressure.Language.Types
   '-='           { SubAssign _ }
   '*='           { MulAssign _ }
   '/='           { DivAssign _ }
+  '%='           { ModAssign _ }
   and            { KwAnd _ }
   or             { KwOr _ }
   '!'            { KwNot _ }
@@ -64,6 +66,7 @@ import Pressure.Language.Types
   '<<'           { ShiftLeft _ }
   '*'            { Times _ }
   '/'            { Div _ }
+  '%'            { Mod _ }
   '&'            { Ampersand _ }
   '('            { OpenPar _ }
   ')'            { ClosePar _ }
@@ -71,7 +74,7 @@ import Pressure.Language.Types
   '}'            { CloseBraces _ }
   '['            { OpenBrack _ }
   ']'            { CloseBrack _ }
-  '::'           { DoubleDot _ }
+  '..'           { DoubleDot _ }
   '.'            { Dot _ }
   ','            { Comma _ }
   ';'            { Semicolon _ }
@@ -113,6 +116,7 @@ AssignStmt : Expr '=' Expr  { ParsedAssign $1 $3 }
            | Expr '-=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr SubOp $1 $3)) }
            | Expr '*=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp $1 $3)) }
            | Expr '/=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp $1 $3)) }
+           | Expr '%=' Expr { ParsedAssign $1 (ParsedExpr (token_posn $2) (ParsedBinaryExpr ModOp $1 $3)) }
 
 ValueDecl : ID ':' OptType '=' Expr   { ParsedValueDecl Mutable (toIdent $1) $3 $5 }
           | ID ':' OptType ':' Expr   { ParsedValueDecl Constant (toIdent $1) $3 $5 }
@@ -132,6 +136,7 @@ Expr : IfExpr         { $1 }
      | ContinueExpr   { $1 }
      | FnExpr         { $1 }
      | LogicalOrExpr  { $1 }
+     | StructInitExpr { $1 }
      | TypeLitExpr    { ParsedExpr (typePos $1) (ParsedTypeLit $1) }
 
 IfExpr : if Expr Block ElseBranch  { ParsedExpr (exprPos $2) (ParsedIfExpr $2 $3 $4) }
@@ -182,14 +187,18 @@ AddExpr : AddExpr '+' MulExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr Add
 
 MulExpr : MulExpr '*' UnaryExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr MulOp $1 $3) }
         | MulExpr '/' UnaryExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr DivOp $1 $3) }
+        | MulExpr '%' UnaryExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr ModOp $1 $3) }
         | UnaryExpr             { $1 }
 
-UnaryExpr : '-' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NegOp $2) }
-          | '&' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr AmpersandOp $2) }
-          | '!' UnaryExpr { ParsedExpr (token_posn $1) (ParsedUnaryExpr NotOp $2) }
-          | CallExpr      { $1 }
+UnaryExpr : '-' UnaryExpr     { ParsedExpr (token_posn $1) (ParsedUnaryExpr NegOp $2) }
+          | '&' mut UnaryExpr { ParsedExpr (token_posn $1) (ParsedAddrOfExpr True $3) }
+          | '&' UnaryExpr     { ParsedExpr (token_posn $1) (ParsedAddrOfExpr False $2) }
+          | '!' UnaryExpr     { ParsedExpr (token_posn $1) (ParsedUnaryExpr NotOp $2) }
+          | CallExpr          { $1 }
 
 CallExpr : AtomExpr              { $1 }
+         | CallExpr '.' ID       { ParsedExpr (exprPos $1) (ParsedMemberAccess $1 (toIdent $3)) }
+         | CallExpr '.' '*'      { ParsedExpr (exprPos $1) (ParsedDerefExpr $1) }
          | CallExpr '(' Args ')' { ParsedExpr (exprPos $1) (ParsedCallExpr $1 $3) }
          | CallExpr UnitLit      { ParsedExpr (exprPos $1) (ParsedCallExpr $1 []) }
          | CallExpr '[' Expr ']' { ParsedExpr (exprPos $1) (ParsedIndexExpr $1 $3) }
@@ -207,11 +216,9 @@ AtomExpr : INT_LITERAL     { toIntLit $1 }
          | true            { ParsedExpr (token_posn $1) (ParsedBoolLit True) }
          | false           { ParsedExpr (token_posn $1) (ParsedBoolLit False) }
          | ArrayLit        { $1 }
-         | StructInitExpr  { $1 }
          | '(' Expr ')'    { $2 }
          | UnitLit         { ParsedExpr (token_posn $1) ParsedUnitLit }
          | ID              { ParsedExpr (token_posn $1) (ParsedVarExpr (toIdent $1)) }
-         | AtomExpr '.' ID { ParsedExpr (exprPos $1) (ParsedMemberAccess $1 (toIdent $3)) }
          | BUILTIN_ID      { ParsedExpr (token_posn $1) (ParsedVarExpr (toBuiltinIdent $1)) }
 
 ArrayLit : '[' Args ']'   { ParsedExpr (token_posn $1) (ParsedArrayLit $2) }
@@ -221,19 +228,23 @@ ArrayLit : '[' Args ']'   { ParsedExpr (token_posn $1) (ParsedArrayLit $2) }
 OptType : TypeExpr { Just $1 }
         |          { Nothing }
 
-TypeExpr : FnType     { $1 }
-         | ArrType    { $1 }
-         | TypeLit    { $1 }
-         | StructType { $1 }
-         | ID         { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
+TypeExpr : FnType      { $1 }
+         | ArrType     { $1 }
+         | PointerType { $1 }
+         | TypeLit     { $1 }
+         | StructType  { $1 }
+         | ID          { TypeSyntax (token_posn $1) (NameSyntax (idToString $1)) }
+
+PointerType : '*' TypeExpr                 { TypeSyntax (token_posn $1) (PointerSyntax $2 Constant) }
+            | '*' mut TypeExpr             { TypeSyntax (token_posn $1) (PointerSyntax $3 Mutable) }
 
 TypeLitExpr : FnType     { $1 }
             | TypeLit    { $1 }
             | StructType { $1 }
 
 FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
-       | fn UnitLit '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $4) }
-       | fn '(' ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $5) }
+       | fn UnitLit '->' TypeExpr                   { TypeSyntax (token_posn $1) (FnSyntax [] $4) }
+       | fn '(' ')' '->' TypeExpr                   { TypeSyntax (token_posn $1) (FnSyntax [] $5) }
 
 FnParamsTypesList : TypeExpr                       { [$1] }
                   | TypeExpr ',' FnParamsTypesList { $1 : $3 }

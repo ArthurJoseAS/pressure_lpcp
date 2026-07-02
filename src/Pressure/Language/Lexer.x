@@ -11,78 +11,81 @@ tokens :-
 
   $white+                         ;
   "//".*                          ;
-  if                                 { mkToken KwIf }
-  else                               { mkToken KwElse }
-  true                               { mkToken KwTrue }
-  false                              { mkToken KwFalse }
-  \(\)                               { mkToken UnitLit }
-  for                                { mkToken KwFor }
-  while                              { mkToken KwWhile }
-  continue                           { mkToken KwContinue }
-  break                              { mkToken KwBreak }
-  fn                                 { mkToken KwFn }
-  struct                             { mkToken KwStruct }
-  enum                               { mkToken KwEnum }
-  return                             { mkToken KwReturn }
-  int                                { mkToken KwInt }
-  uint                               { mkToken KwUint }
-  float                              { mkToken KwFloat }
-  bool                               { mkToken KwBool }
-  string                             { mkToken KwString }
-  unit                               { mkToken KwUnit }
-  byte                               { mkToken KwByte }
-  type                               { mkToken KwType }
-  anytype                            { mkToken KwAnyType }
-  i8                                 { mkToken KwI8 }
-  i16                                { mkToken KwI16 }
-  i32                                { mkToken KwI32 }
-  i64                                { mkToken KwI64 }
-  u8                                 { mkToken KwU8 }
-  u16                                { mkToken KwU16 }
-  u32                                { mkToken KwU32 }
-  u64                                { mkToken KwU64 }
-  f32                                { mkToken KwF32 }
-  f64                                { mkToken KwF64 }
-  \=                                 { mkToken Equal }
-  \<                                 { mkToken Lt }
-  \>                                 { mkToken Gt }
-  \=\=                               { mkToken CmpEq }
-  \!\=                               { mkToken CmpNeq }
-  \<\=                               { mkToken CmpLeq }
-  \>\=                               { mkToken CmpGeq }
-  \-\>                               { mkToken ArrowRight }
-  \+\=                               { mkToken AddAssign }
-  \-\=                               { mkToken SubAssign }
-  \*\=                               { mkToken MulAssign }
-  \/\=                               { mkToken DivAssign }
-  and                                { mkToken KwAnd }
-  or                                 { mkToken KwOr }
-  !                                  { mkToken KwNot }
-  \&                                 { mkToken Ampersand }
-  \+                                 { mkToken Plus }
-  \-                                 { mkToken Minus }
-  \>\>                               { mkToken ShiftRight }
-  \<\<                               { mkToken ShiftLeft }
-  \*                                 { mkToken Times }
-  \/                                 { mkToken Div }
-  \(                                 { mkToken OpenPar }
-  \)                                 { mkToken ClosePar }
-  \{                                 { mkToken OpenBraces }
-  \}                                 { mkToken CloseBraces }
-  \[                                 { mkToken OpenBrack }
-  \]                                 { mkToken CloseBrack }
-  \.\.                               { mkToken DoubleDot }
-  \.                                 { mkToken Dot }
-  \,                                 { mkToken Comma }
-  \;                                 { mkToken Semicolon }
-  \:                                 { mkToken Colon }
-  \'                                 { mkToken SingleQuote }
+  if                                  { mkToken KwIf }
+  else                                { mkToken KwElse }
+  true                                { mkToken KwTrue }
+  false                               { mkToken KwFalse }
+  \(\)                                { mkToken UnitLit }
+  for                                 { mkToken KwFor }
+  while                               { mkToken KwWhile }
+  continue                            { mkToken KwContinue }
+  break                               { mkToken KwBreak }
+  fn                                  { mkToken KwFn }
+  struct                              { mkToken KwStruct }
+  enum                                { mkToken KwEnum }
+  return                              { mkToken KwReturn }
+  int                                 { mkToken KwInt }
+  uint                                { mkToken KwUint }
+  float                               { mkToken KwFloat }
+  mut                                 { mkToken KwMut }
+  bool                                { mkToken KwBool }
+  string                              { mkToken KwString }
+  unit                                { mkToken KwUnit }
+  byte                                { mkToken KwByte }
+  type                                { mkToken KwType }
+  anytype                             { mkToken KwAnyType }
+  i8                                  { mkToken KwI8 }
+  i16                                 { mkToken KwI16 }
+  i32                                 { mkToken KwI32 }
+  i64                                 { mkToken KwI64 }
+  u8                                  { mkToken KwU8 }
+  u16                                 { mkToken KwU16 }
+  u32                                 { mkToken KwU32 }
+  u64                                 { mkToken KwU64 }
+  f32                                 { mkToken KwF32 }
+  f64                                 { mkToken KwF64 }
+  \=                                  { mkToken Equal }
+  \<                                  { mkToken Lt }
+  \>                                  { mkToken Gt }
+  \=\=                                { mkToken CmpEq }
+  \!\=                                { mkToken CmpNeq }
+  \<\=                                { mkToken CmpLeq }
+  \>\=                                { mkToken CmpGeq }
+  \-\>                                { mkToken ArrowRight }
+  \+\=                                { mkToken AddAssign }
+  \-\=                                { mkToken SubAssign }
+  \*\=                                { mkToken MulAssign }
+  \/\=                                { mkToken DivAssign }
+  \%\=                                { mkToken ModAssign }
+  and                                 { mkToken KwAnd }
+  or                                  { mkToken KwOr }
+  !                                   { mkToken KwNot }
+  \&                                  { mkToken Ampersand }
+  \+                                  { mkToken Plus }
+  \-                                  { mkToken Minus }
+  \>\>                                { mkToken ShiftRight }
+  \<\<                                { mkToken ShiftLeft }
+  \*                                  { mkToken Times }
+  \/                                  { mkToken Div }
+  \%                                  { mkToken Mod }
+  \(                                  { mkToken OpenPar }
+  \)                                  { mkToken ClosePar }
+  \{                                  { mkToken OpenBraces }
+  \}                                  { mkToken CloseBraces }
+  \[                                  { mkToken OpenBrack }
+  \]                                  { mkToken CloseBrack }
+  \.\.                                { mkToken DoubleDot }
+  \.                                  { mkToken Dot }
+  \,                                  { mkToken Comma }
+  \;                                  { mkToken Semicolon }
+  \:                                  { mkToken Colon }
+  \'                                  { mkToken SingleQuote }
   \" ([^\"] | \\ .)* \"               { mkTokenText (\p s -> StringLiteral p (read s)) }
-  \"                                 { mkToken DoubleQuote }
+  \"                                  { mkToken DoubleQuote }
   @[$alpha \_] [$alpha $digit \_ \']* { mkTokenText (\p s -> BuiltinId p (drop 1 s)) }
-  [$alpha \_] [$alpha $digit \_ \']* { mkTokenText Id }
-  $digit+ \. $digit+                 { mkTokenText (\p s -> FloatLiteral p (read s)) }
-  $digit+                            { mkTokenText (\p s -> IntLiteral p (read s)) }
+  [$alpha \_] [$alpha $digit \_ \']*  { mkTokenText Id }
+  $digit+ \. $digit+                  { mkTokenText (\p s -> FloatLiteral p (read s)) }
+  $digit+                             { mkTokenText (\p s -> IntLiteral p (read s)) }
 
 {
 
@@ -104,6 +107,7 @@ data Token
   | KwInt AlexPosn
   | KwUint AlexPosn
   | KwFloat AlexPosn
+  | KwMut AlexPosn
   | KwBool AlexPosn
   | KwString AlexPosn
   | KwUnit AlexPosn
@@ -132,6 +136,7 @@ data Token
   | SubAssign AlexPosn
   | MulAssign AlexPosn
   | DivAssign AlexPosn
+  | ModAssign AlexPosn
   | KwAnd AlexPosn
   | KwOr AlexPosn
   | KwNot AlexPosn
@@ -141,6 +146,7 @@ data Token
   | ShiftLeft AlexPosn
   | Times AlexPosn
   | Div AlexPosn
+  | Mod AlexPosn
   | Ampersand AlexPosn
   | OpenPar AlexPosn
   | ClosePar AlexPosn
@@ -179,6 +185,7 @@ token_posn (KwReturn p)   = p
 token_posn (KwInt p)   = p
 token_posn (KwUint p)   = p
 token_posn (KwFloat p)   = p
+token_posn (KwMut p)   = p
 token_posn (KwBool p)   = p
 token_posn (KwString p) = p
 token_posn (KwUnit p)   = p
@@ -207,6 +214,7 @@ token_posn (AddAssign p) = p
 token_posn (SubAssign p) = p
 token_posn (MulAssign p) = p
 token_posn (DivAssign p) = p
+token_posn (ModAssign p) = p
 token_posn (KwAnd p)      = p
 token_posn (KwOr p)       = p
 token_posn (KwNot p)    = p
@@ -216,6 +224,7 @@ token_posn (ShiftRight p) = p
 token_posn (ShiftLeft p)  = p
 token_posn (Times p)      = p
 token_posn (Div p)        = p
+token_posn (Mod p)        = p
 token_posn (Ampersand p)     = p
 token_posn (OpenPar p)    = p
 token_posn (ClosePar p)   = p
@@ -288,6 +297,7 @@ prettyToken = \case
   KwInt _ -> "keyword 'int'"
   KwUint _ -> "keyword 'uint'"
   KwFloat _ -> "keyword 'float'"
+  KwMut _ -> "keyword 'mut'"
   KwBool _ -> "keyword 'bool'"
   KwString _ -> "keyword 'string'"
   KwUnit _ -> "keyword 'unit'"
@@ -316,6 +326,7 @@ prettyToken = \case
   SubAssign _ -> "'-='"
   MulAssign _ -> "'*='"
   DivAssign _ -> "'/='"
+  ModAssign _ -> "'%='"
   KwAnd _ -> "keyword 'and'"
   KwOr _ -> "keyword 'or'"
   KwNot _ -> "'!'"
@@ -326,6 +337,7 @@ prettyToken = \case
   ShiftLeft _ -> "'<<'"
   Times _ -> "'*'"
   Div _ -> "'/'"
+  Mod _ -> "'%'"
   OpenPar _ -> "'('"
   ClosePar _ -> "')'"
   OpenBraces _ -> "'{'"

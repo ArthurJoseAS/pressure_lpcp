@@ -13,7 +13,7 @@
 - [x] Add support for loops (grammar, interpreter) - Lima
 - [ ] Add support for arrays (grammar, interpreter) - Skeete
 - [x] Add string literals.
-- [ ] Add support for pointers (grammar, interpreter)
+- [x] Add support for pointers (grammar, interpreter)
 - [ ] Add support for structs (grammar, interpreter) - Samuel
 - [ ] Add support for enums (grammar, interpreter)
 - [ ] Add support for pattern matching (grammar, interpreter)

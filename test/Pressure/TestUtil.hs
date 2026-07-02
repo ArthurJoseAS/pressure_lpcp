@@ -21,7 +21,9 @@ where
 
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State (runStateT)
+import Data.IORef
 import Data.Map.Strict qualified as Map
+import System.IO.Unsafe (unsafePerformIO)
 import Pressure.Builtins (initialValueEnv)
 import Pressure.Interpreter.Env (Env)
 import Pressure.Interpreter.Error (Error (..), EvalError, RuntimeError (..))
@@ -79,7 +81,7 @@ lookupValue :: String -> Env -> Maybe Value
 lookupValue _ [] = Nothing
 lookupValue name (scope : rest) =
   case Map.lookup name scope of
-    Just v -> Just v
+    Just ref -> Just (unsafePerformIO (readIORef ref))
     Nothing -> lookupValue name rest
 
 withTokens :: String -> String -> (ParsedRepl -> IO ()) -> IO ()

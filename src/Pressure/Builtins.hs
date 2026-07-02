@@ -3,6 +3,7 @@ module Pressure.Builtins where
 import Control.Monad (unless, zipWithM_)
 import Control.Monad.Except (MonadError (throwError), liftEither)
 import Control.Monad.IO.Class (liftIO)
+import Data.IORef
 import Data.Map.Strict qualified as Map
 import Pressure.Interpreter.Env (Eval)
 import Pressure.Interpreter.Error (EvalError (RuntimeError), RuntimeError (..), panicAt)
@@ -12,16 +13,17 @@ import Pressure.Language.Lexer (AlexPosn)
 import Pressure.Language.Types
 import Pressure.Typechecker.Env (Check, TypeEnv)
 import Pressure.Typechecker.Error (Error (..))
+import System.IO.Unsafe (unsafePerformIO)
 import Text.Read (readMaybe)
 
 initialValueEnv :: ValueEnv
 initialValueEnv =
   [ Map.fromList
-      [ ("@read", VBuiltin "@read"),
-        ("@printf", VBuiltin "@printf"),
-        ("@as", VBuiltin "@as"),
-        ("@push", VBuiltin "@push"),
-        ("@pop", VBuiltin "@pop")
+      [ ("@read", unsafePerformIO (newIORef (VBuiltin "@read"))),
+        ("@printf", unsafePerformIO (newIORef (VBuiltin "@printf"))),
+        ("@as", unsafePerformIO (newIORef (VBuiltin "@as"))),
+        ("@push", unsafePerformIO (newIORef (VBuiltin "@push"))),
+        ("@pop",  unsafePerformIO (newIORef (VBuiltin "@pop")))
       ]
   ]
 

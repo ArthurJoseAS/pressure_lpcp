@@ -32,8 +32,8 @@ testTokenizeOperators :: IO ()
 testTokenizeOperators = do
   ops <-
     assertRight "tokenize operators" $
-      tokenizeEither "= < > == != <= >= -> and or ! + - >> << * / &"
-  assertEqual "operator count" 18 (length ops)
+      tokenizeEither "= < > == != <= >= -> and or ! + - >> << * / % &"
+  assertEqual "operator count" 19 (length ops)
 
 testTokenizeDelimiters :: IO ()
 testTokenizeDelimiters = do

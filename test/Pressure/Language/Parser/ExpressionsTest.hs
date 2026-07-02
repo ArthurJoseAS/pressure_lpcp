@@ -1,8 +1,9 @@
 module Pressure.Language.Parser.ExpressionsTest (parserExpressionTests) where
 
 import Pressure.Language.Ast
+import Pressure.Language.Lexer (Token (Mod))
 import Pressure.Language.Parser.TestUtil
-import Pressure.Language.Types (BinaryOp (..), Mutability (Mutable), UnaryOp (..))
+import Pressure.Language.Types (BinaryOp (..), Mutability (..), UnaryOp (..))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
 
@@ -13,6 +14,7 @@ parserExpressionTests =
     [ testCase "parses addition expression" testParseAdditionExpr,
       testCase "parses multiplication precedence" testParseMulPrecedence,
       testCase "parses division expression" testParseDivisionExpr,
+      testCase "parses mod expression" testParseModExpr,
       testCase "parses parenthesized expression" testParseParenExpr,
       testCase "parses bare expression" testParseBareExpr,
       testCase "parses variable reference" testParseVarRef,
@@ -30,7 +32,11 @@ parserExpressionTests =
       testCase "parses index expression" testParseIndexExpr,
       testCase "parses index on literal" testParseIndexOnLiteral,
       testCase "parses nested array literal" testParseNestedArrayLit,
-      testCase "parses array of strings" testParseArrayOfStrings
+      testCase "parses array of strings" testParseArrayOfStrings,
+      testCase "parses mutable address-of" testParseAddrOfMut,
+      testCase "parses deref postfix" testParseDeref,
+      testCase "parses pointer type" testParsePointerType,
+      testCase "parses mutable pointer type" testParsePointerTypeMut
     ]
 
 testParseAdditionExpr :: IO ()
@@ -47,6 +53,11 @@ testParseDivisionExpr :: IO ()
 testParseDivisionExpr = do
   ast <- parse "parse division expression" "value: i32 = 8 / 4 / 2;"
   expect "division expression" (case singleDecl ast of Just (ParsedValueDecl Mutable _ (Just typ) (ParsedExpr _ (ParsedBinaryExpr DivOp (ParsedExpr _ (ParsedBinaryExpr DivOp (ParsedExpr _ (ParsedIntLit 8)) (ParsedExpr _ (ParsedIntLit 4)))) (ParsedExpr _ (ParsedIntLit 2))))) -> isIntSyntax typ; _ -> False) ast
+
+testParseModExpr :: IO ()
+testParseModExpr = do
+  ast <- parse "parse mod expression" "value: i32 = 8 % 4 % 2;"
+  expect "mod expression" (case singleDecl ast of Just (ParsedValueDecl Mutable _ (Just typ) (ParsedExpr _ (ParsedBinaryExpr ModOp (ParsedExpr _ (ParsedBinaryExpr ModOp (ParsedExpr _ (ParsedIntLit 8)) (ParsedExpr _ (ParsedIntLit 4)))) (ParsedExpr _ (ParsedIntLit 2))))) -> isIntSyntax typ; _ -> False) ast
 
 testParseParenExpr :: IO ()
 testParseParenExpr = do
@@ -91,7 +102,32 @@ testParseUnaryNot = do
 testParseUnaryAmpersand :: IO ()
 testParseUnaryAmpersand = do
   ast <- parse "parse unary ampersand" "&x;"
-  expect "unary ampersand" (case singleExpr ast of Just (ParsedExpr _ (ParsedUnaryExpr AmpersandOp (ParsedExpr _ (ParsedVarExpr (Ident _ "x"))))) -> True; _ -> False) ast
+  expect "unary ampersand" (case singleExpr ast of Just (ParsedExpr _ (ParsedAddrOfExpr False (ParsedExpr _ (ParsedVarExpr (Ident _ "x"))))) -> True; _ -> False) ast
+
+testParseAddrOfMut :: IO ()
+testParseAddrOfMut = do
+  ast <- parse "parse mutable address-of" "&mut x;"
+  expect "mutable address-of" (case singleExpr ast of Just (ParsedExpr _ (ParsedAddrOfExpr True (ParsedExpr _ (ParsedVarExpr (Ident _ "x"))))) -> True; _ -> False) ast
+
+testParseDeref :: IO ()
+testParseDeref = do
+  ast <- parse "parse deref postfix" "y.*;"
+  expect "deref postfix" (case singleExpr ast of Just (ParsedExpr _ (ParsedDerefExpr (ParsedExpr _ (ParsedVarExpr (Ident _ "y"))))) -> True; _ -> False) ast
+
+isPointerType :: Bool -> TypeSyntax -> Bool
+isPointerType expectedMut = \case
+  TypeSyntax _ (PointerSyntax _ m) -> m == (if expectedMut then Mutable else Constant)
+  _ -> False
+
+testParsePointerType :: IO ()
+testParsePointerType = do
+  ast <- parse "parse pointer type" "x: *int = &y;"
+  expect "pointer type" (case singleDecl ast of Just (ParsedValueDecl Mutable _ (Just typ) _) -> isPointerType False typ; _ -> False) ast
+
+testParsePointerTypeMut :: IO ()
+testParsePointerTypeMut = do
+  ast <- parse "parse mutable pointer type" "x: *mut int = &mut y;"
+  expect "mutable pointer type" (case singleDecl ast of Just (ParsedValueDecl Mutable _ (Just typ) _) -> isPointerType True typ; _ -> False) ast
 
 testParseUnaryPrecedence :: IO ()
 testParseUnaryPrecedence = do

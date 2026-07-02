@@ -43,6 +43,7 @@ checkType (TypeSyntax pos k) = case k of
     return $ StructT fields members
   StringSyntax -> return StringT
   ArraySyntax t -> (ArrT <$> (checkType t))
+  PointerSyntax inner mut -> PtrT <$> checkType inner <*> pure mut
 
 checkStructFields :: [StructItem] -> Check [(String, Type)]
 checkStructFields items = do
@@ -154,6 +155,8 @@ checkExprM (ParsedExpr pos k) = case k of
   ParsedUnitLit -> return $ TypedExpr pos UnitT TypedUnitLit
   ParsedTypeLit ts -> TypedExpr pos TypeT . TypedTypeLit <$> checkType ts
   ParsedUnaryExpr op e -> checkUnaryExpr pos op e
+  ParsedAddrOfExpr isMut e -> checkAddrOfExpr pos isMut e
+  ParsedDerefExpr e -> checkDerefExpr pos e
   ParsedBinaryExpr op l r -> checkBinaryExpr pos op l r
   ParsedVarExpr i@(Ident _ name) -> do
     env <- getEnv
@@ -286,6 +289,50 @@ checkUnaryExpr pos op e = do
     NotOp -> if isBoolLike tye then Right $ TypedExpr pos tye (TypedUnaryExpr op te) else Left $ UnsupportedUnaryOp pos op tye
     AmpersandOp -> Left $ UnsupportedUnaryOp pos op tye
 
+checkAddrOfExpr :: AlexPosn -> Bool -> ParsedExpr -> Check TypedExpr
+checkAddrOfExpr pos isMut e = do
+  te <- checkExprM e
+  when (not (typedExprIsLValue te)) $
+    liftEither $
+      Left $
+        NotAnLValue pos
+  lvMut <- typedExprLValueMut te
+  when (isMut && lvMut == Constant) $
+    liftEither $
+      Left $
+        ImmutableAddrOf pos
+  let innerType = typeOf te
+  return $ TypedExpr pos (PtrT innerType (if isMut then Mutable else Constant)) (TypedAddrOfExpr isMut te)
+
+-- True iff a typed expression is structurally an l-value (var, member
+-- access, or deref).
+typedExprIsLValue :: TypedExpr -> Bool
+typedExprIsLValue = \case
+  TypedExpr _ _ (TypedVarExpr _) -> True
+  TypedExpr _ _ (TypedMemberAccess _ _) -> True
+  TypedExpr _ _ (TypedIndexExpr _ _) -> True
+  _ -> False
+
+-- Recover the mutability of a typed expression that is an l-value. For
+-- member access we recurse into the base: `&mut s.v` requires the outer
+-- binding `s` to itself be mutable.
+typedExprLValueMut :: TypedExpr -> Check Mutability
+typedExprLValueMut = \case
+  TypedExpr _ _ (TypedVarExpr (Ident _ name)) -> do
+    env <- getEnv
+    case lookupName name env of
+      Just (_, mut) -> return mut
+      Nothing -> return Mutable
+  TypedExpr _ _ (TypedMemberAccess base _) -> typedExprLValueMut base
+  _ -> return Mutable
+
+checkDerefExpr :: AlexPosn -> ParsedExpr -> Check TypedExpr
+checkDerefExpr pos e = do
+  te <- checkExprM e
+  case typeOf te of
+    PtrT inner _ -> return $ TypedExpr pos inner (TypedDerefExpr te)
+    other -> liftEither $ Left $ TypeMismatch pos (PtrT UnitT Constant) other
+
 checkFnExpr :: AlexPosn -> [Param] -> TypeSyntax -> ParsedBlock -> Check TypedExpr
 checkFnExpr pos params ret body = do
   (typedParams, typedRet) <- checkFnSig params ret
@@ -405,6 +452,7 @@ checkBinaryOp pos op t1 t2 = case op of
   SubOp -> numeric
   MulOp -> numeric
   DivOp -> numeric
+  ModOp -> numeric
   AndOp -> boolLike
   OrOp -> boolLike
   EqOp -> equality
@@ -446,6 +494,7 @@ compatible t1 t2 = case (t1, t2) of
      in length sf1 == length sf2
           && and (zipWith (\(n1, t1') (n2, t2') -> n1 == n2 && compatible t1' t2') sf1 sf2)
   (ArrT a1, ArrT a2) -> compatible a1 a2
+  (PtrT a1 m1, PtrT a2 m2) -> m1 == m2 && compatible a1 a2
   (_, _) -> False
 
 isNumeric :: Type -> Bool
@@ -521,33 +570,41 @@ checkDecl (ParsedValueDecl mut ident mTs expr) = do
   return $ TypedValueDecl mut ident inferred te
 
 checkAssignableLhs :: ParsedExpr -> Check (TypedExpr, Type, Mutability)
-checkAssignableLhs (ParsedExpr pos (ParsedVarExpr ident@(Ident varPos name))) = do
-  env <- getEnv
-  case lookupName name env of
-    Just (typ, mut) -> return (TypedExpr pos typ (TypedVarExpr ident), typ, mut)
-    Nothing -> liftEither $ Left $ UndefinedVariable varPos name
-checkAssignableLhs (ParsedExpr pos (ParsedMemberAccess expr fieldIdent@(Ident fieldPos fieldName))) = do
-  (typedBase, baseType, _) <- checkAssignableLhs expr
-  case baseType of
-    StructT fields members ->
-      case lookup fieldName fields of
-        Just fieldType -> return (TypedExpr pos fieldType (TypedMemberAccess typedBase fieldIdent), fieldType, Mutable)
-        Nothing ->
-          case lookup fieldName members of
-            Just (_, _) -> liftEither $ Left $ AssignToConstant fieldPos fieldName
-            Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
-    other -> liftEither $ Left $ TypeMismatch fieldPos (StructT [] []) other
-checkAssignableLhs (ParsedExpr pos (ParsedIndexExpr base idx)) = do
-  (typedBase, baseType, _) <- checkAssignableLhs base
-  typedIdx <- checkExprM idx
-  case typeOf typedIdx of
-    IntT _ _ -> pure ()
-    other -> liftEither $ Left $ TypeMismatch (typedExprPos typedIdx) (IntT Signed I32) other
-  case baseType of
-    ArrT innerType -> return (TypedExpr pos innerType (TypedIndexExpr typedBase typedIdx), innerType, Mutable)
-    other -> liftEither $ Left $ TypeMismatch pos (ArrT AnyTypeT) other
-checkAssignableLhs (ParsedExpr pos _) =
-  liftEither $ Left $ AssignToConstant pos "<not an assignment target>"
+checkAssignableLhs = \case
+  ParsedExpr pos (ParsedVarExpr ident@(Ident varPos name)) -> do
+    env <- getEnv
+    case lookupName name env of
+      Just (typ, mut) -> return (TypedExpr pos typ (TypedVarExpr ident), typ, mut)
+      Nothing -> liftEither $ Left $ UndefinedVariable varPos name
+  ParsedExpr pos (ParsedMemberAccess expr fieldIdent@(Ident fieldPos fieldName)) -> do
+    (typedBase, baseType, _) <- checkAssignableLhs expr
+    case baseType of
+      StructT fields members ->
+        case lookup fieldName fields of
+          Just fieldType -> return (TypedExpr pos fieldType (TypedMemberAccess typedBase fieldIdent), fieldType, Mutable)
+          Nothing ->
+            case lookup fieldName members of
+              -- FIX: We should be able to assign to mutable variables.
+              Just (_, _) -> liftEither $ Left $ AssignToConstant fieldPos fieldName
+              Nothing -> liftEither $ Left $ UndefinedVariable fieldPos fieldName
+      other -> liftEither $ Left $ TypeMismatch fieldPos (StructT [] []) other
+  ParsedExpr pos (ParsedIndexExpr base idx) -> do
+    (typedBase, baseType, _) <- checkAssignableLhs base
+    typedIdx <- checkExprM idx
+    case typeOf typedIdx of
+      IntT _ _ -> pure ()
+      other -> liftEither $ Left $ TypeMismatch (typedExprPos typedIdx) (IntT Signed I32) other
+    case baseType of
+      ArrT inner -> return (TypedExpr pos inner (TypedIndexExpr typedBase typedIdx), inner, Mutable)
+      other -> liftEither $ Left $ TypeMismatch pos (ArrT AnyTypeT) other
+  ParsedExpr pos (ParsedDerefExpr base) -> do
+    (typedBase, _, _) <- checkAssignableLhs base
+    case typeOf typedBase of
+      PtrT inner Mutable -> return (TypedExpr pos inner (TypedDerefExpr typedBase), inner, Mutable)
+      PtrT _ Constant -> liftEither $ Left $ AssignThroughImmutablePtr (typedExprPos typedBase)
+      other -> liftEither $ Left $ TypeMismatch pos (PtrT AnyTypeT Constant) other
+  ParsedExpr pos _ ->
+    liftEither $ Left $ AssignToConstant pos "<not an assignment target>"
 
 getAssignableName :: ParsedExpr -> String
 getAssignableName (ParsedExpr _ (ParsedVarExpr (Ident _ name))) = name

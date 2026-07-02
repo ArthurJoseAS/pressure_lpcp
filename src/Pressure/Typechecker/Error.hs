@@ -25,6 +25,9 @@ data Error
   | InvalidCast AlexPosn Type Type
   | MissingMain
   | InvalidMain AlexPosn Type
+  | NotAnLValue AlexPosn
+  | ImmutableAddrOf AlexPosn
+  | AssignThroughImmutablePtr AlexPosn
   deriving (Show, Eq)
 
 errorPos :: Error -> Maybe AlexPosn
@@ -50,6 +53,9 @@ errorPos = \case
   InvalidCast pos _ _ -> Just pos
   MissingMain -> Nothing
   InvalidMain pos _ -> Just pos
+  NotAnLValue pos -> Just pos
+  ImmutableAddrOf pos -> Just pos
+  AssignThroughImmutablePtr pos -> Just pos
 
 errorInfo :: Error -> (Maybe AlexPosn, String)
 errorInfo err =
@@ -76,4 +82,7 @@ errorInfo err =
       InvalidPrintf _ msg -> "@printf: " ++ msg
       InvalidCast _ target actual -> "invalid cast to '" ++ prettyType target ++ "' from '" ++ prettyType actual ++ "'"
       InvalidMain _ t -> "expected main function with type '" ++ prettyType (FnT [] UnitT) ++ "' found '" ++ prettyType t ++ "'"
+      NotAnLValue _ -> "expression is not an l-value (cannot take its address)"
+      ImmutableAddrOf _ -> "cannot take `&mut` of an immutable binding"
+      AssignThroughImmutablePtr _ -> "cannot assign through an immutable pointer (use `*mut` instead)"
   )

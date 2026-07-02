@@ -12,7 +12,9 @@ module Pressure.Interpreter.Eval
 where
 
 import Control.Monad.Except (MonadError (catchError, throwError))
-import Control.Monad.State (get, gets, modify, put)
+import Control.Monad.State (get, modify)
+import Data.Fixed (mod')
+import Data.IORef
 import Data.Maybe (mapMaybe)
 import Pressure.Builtins (dispatchBuiltin)
 import Pressure.Interpreter.Env
@@ -33,17 +35,22 @@ evalExpr (TypedExpr pos _ kind) = case kind of
   TypedTypeLit t -> return (VType t)
   TypedStringLit s -> return (VString s)
   TypedUnaryExpr op e -> evalUnaryExpr pos op e
+  TypedAddrOfExpr isMut e -> evalAddrOfExpr pos isMut e
+  TypedDerefExpr e -> evalDerefExpr pos e
   TypedBinaryExpr op l r -> evalBinaryExpr pos op l r
   TypedVarExpr (Ident ipos name) -> evalVarExpr ipos name
   TypedIfExpr c t elseBlock -> evalIfExpr pos c t elseBlock
   TypedWhileExpr c body mElse -> evalWhileExpr pos c body mElse
-  TypedFnExpr params ret body -> evalFnExpr params ret body
+  TypedFnExpr params ret body -> VFunction params ret body <$> get
   TypedCallExpr callee args -> evalCallExpr pos callee args
   TypedStructInit _ fields -> do
-    evaluatedFields <- mapM (\(name, expr) -> do
-      val <- evalExpr expr -- evaluate field expression (<id> = <expr>)
-      return (name,val)
-      ) fields
+    evaluatedFields <-
+      mapM
+        ( \(name, expr) -> do
+            val <- evalExpr expr -- evaluate field expression (<id> = <expr>)
+            return (name, val)
+        )
+        fields
     return $ VStruct evaluatedFields
   TypedMemberAccess expr fieldId -> do
     v <- evalExpr expr
@@ -52,7 +59,7 @@ evalExpr (TypedExpr pos _ kind) = case kind of
         -- fetches the field from the struct
         case lookup (identName fieldId) fields of
           Just val -> return val -- value found
-          Nothing -> panicAt pos "field not found in struct value" 
+          Nothing -> panicAt pos "field not found in struct value"
       _ -> panicAt pos "attempted to access member of non-struct value" -- value found
   TypedBreakExpr mExpr -> evalBreakExpr pos mExpr
   TypedContinueExpr -> evalContinueExpr pos
@@ -99,12 +106,10 @@ evalContinueExpr _ = throwError ContinueSignal
 evalVarExpr :: AlexPosn -> String -> Eval Value
 evalVarExpr pos name = do
   env <- get
-  case lookupName name env of
+  mval <- readName name env
+  case mval of
     Just v -> return v
     Nothing -> panicAt pos ("undefined variable '" ++ name ++ "' reached evaluator")
-
-evalFnExpr :: [TypedParam] -> Type -> TypedBlock -> Eval Value
-evalFnExpr params ret body = gets $ VFunction params ret body
 
 evalCallExpr :: AlexPosn -> TypedExpr -> [TypedExpr] -> Eval Value
 evalCallExpr pos callee args = do
@@ -139,6 +144,32 @@ evalUnaryExpr pos op e = do
     NotOp -> evalBooleanUn not ve
     AmpersandOp -> panicAt pos "not implemented: unary '&'"
 
+evalAddrOfExpr :: AlexPosn -> Bool -> TypedExpr -> Eval Value
+evalAddrOfExpr pos isMut e = do
+  env <- get
+  case typedExprLValueRefPath e env of
+    Just (ref, path) -> pure (VPtr (if isMut then Mutable else Constant) ref path)
+    Nothing -> panicAt pos "address-of requires an l-value"
+
+evalDerefExpr :: AlexPosn -> TypedExpr -> Eval Value
+evalDerefExpr pos e = do
+  v <- evalExpr e
+  case v of
+    VPtr _ ref path -> readPath ref path
+    _ -> panicAt pos "dereference of non-pointer value"
+
+-- | Decompose a typed expression that should be an l-value into the root
+-- IORef and the path that selects the value within it. The path is empty
+-- for a plain variable and is extended with the field name for member access.
+-- Dereferences return the underlying pointer's (ref, path).
+typedExprLValueRefPath :: TypedExpr -> Env -> Maybe (IORef Value, LValuePath)
+typedExprLValueRefPath e env = case e of
+  TypedExpr _ _ (TypedVarExpr (Ident _ name)) -> fmap (,[]) (findRef name env)
+  TypedExpr _ _ (TypedMemberAccess base (Ident _ name)) -> do
+    (ref, path) <- typedExprLValueRefPath base env
+    return (ref, path ++ [name])
+  _ -> Nothing
+
 evalNumericUn :: (Integer -> Integer) -> (Double -> Double) -> Value -> Eval Value
 evalNumericUn intOp floatOp v =
   case asNumber v of
@@ -160,6 +191,7 @@ evalBinaryExpr pos op l r = do
     SubOp -> evalNumericBin pos (-) (-) vl vr
     MulOp -> evalNumericBin pos (*) (*) vl vr
     DivOp -> evalDiv pos vl vr
+    ModOp -> evalMod pos vl vr
     AndOp -> evalBoolBin pos (&&) vl vr
     OrOp -> evalBoolBin pos (||) vl vr
     EqOp -> evalEq pos vl vr
@@ -181,6 +213,12 @@ evalDiv pos va vb = case vb of
   VInt _ _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
   VFloat _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
   _ -> evalNumericBin pos div (/) va vb
+
+evalMod :: AlexPosn -> Value -> Value -> Eval Value
+evalMod pos va vb = case vb of
+  VInt _ _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
+  VFloat _ 0 -> throwError $ RuntimeError $ DivisionByZero pos
+  _ -> evalNumericBin pos mod mod' va vb
 
 evalNumericCmp :: AlexPosn -> (Integer -> Integer -> Bool) -> (Double -> Double -> Bool) -> Value -> Value -> Eval Value
 evalNumericCmp pos intCmp floatCmp = withNumbers pos go
@@ -240,6 +278,7 @@ evalLValueUpdate lhs newVal = case typedExprKind lhs of
   TypedIndexExpr base idx -> do
     baseVal <- evalLValue base
     idxVal <- evalExpr idx
+    -- TODO: This should only support usizes in the future.
     case (baseVal, idxVal) of
       (VArray vals, VInt _ _ i) -> do
         let hi = fromIntegral i
@@ -249,6 +288,12 @@ evalLValueUpdate lhs newVal = case typedExprKind lhs of
             let newVals = take hi vals ++ [newVal] ++ drop (hi + 1) vals
             evalLValueUpdate base (VArray newVals)
       _ -> panicAt (typedExprPos lhs) "attempted to index non-array value"
+  TypedDerefExpr base -> do
+    baseVal <- evalExpr base
+    case baseVal of
+      VPtr Mutable ref path -> writePath ref path newVal
+      VPtr Constant _ _ -> panicAt (typedExprPos lhs) "assignment through *T is forbidden"
+      _ -> panicAt (typedExprPos lhs) "invalid l-value in deref"
   _ -> panicAt (typedExprPos lhs) "invalid assignment target in evaluator"
 
 evalLValue :: TypedExpr -> Eval Value
@@ -285,7 +330,7 @@ installFunctionItems stmts = do
           addFn env' (_, name, params, ret, body) =
             let closure = VFunction params ret body extendedEnv
              in bindInCurrentScope name closure env'
-  put extendedEnv
+  modify (const extendedEnv)
 
 functionItem :: TypedStmt -> Maybe (AlexPosn, String, [TypedParam], Type, TypedBlock)
 functionItem = \case
@@ -311,7 +356,7 @@ evalBlock (Block stmts expr) = do
 evalArrayLit :: [TypedExpr] -> Eval Value
 evalArrayLit list = do
   exprList <- mapM evalExpr list
-  return (VArray exprList) 
+  return (VArray exprList)
 
 evalIndexExpr :: AlexPosn -> TypedExpr -> TypedExpr -> Eval Value
 evalIndexExpr pos base index = do
@@ -319,15 +364,13 @@ evalIndexExpr pos base index = do
   indexExpr <- evalExpr index
   haskellIndex <- case indexExpr of
     VInt _ _ i -> return (fromIntegral i)
-    _ -> panicAt pos  "indexing array with non integer value"
-  
+    _ -> panicAt pos "indexing array with non integer value"
   case baseExpr of
     VArray vals ->
       if haskellIndex < 0 || haskellIndex >= length vals
         then panicAt pos ("array index out of bounds: index " ++ show haskellIndex ++ " on length " ++ show (length vals))
         else return (vals !! haskellIndex)
     _ -> panicAt pos "indxexing non array value"
-
 
 -- Programs
 
@@ -338,7 +381,8 @@ evalProgram (Program toplevels) = do
   installFunctionItems stmts
   mapM_ evalStmt stmts
   env <- get
-  _ <- case lookupName "main" env of
+  mMain <- readName "main" env
+  _ <- case mMain of
     Nothing -> panic "missing main in evaluator"
     Just f -> callValue (AlexPn 0 0 0) f [] -- FIXME: Use the correct position of main.
   return VUnit

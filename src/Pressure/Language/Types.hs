@@ -24,6 +24,7 @@ data Type
   | UnitT
   | TypeT
   | StructT [(String, Type)] [(String, (Type, Mutability))]
+  | PtrT Type Mutability
   | AnyTypeT
   deriving (Show, Eq)
 
@@ -47,6 +48,8 @@ prettyType = \case
   TypeT -> "type"
   AnyTypeT -> "anytype"
   StructT fields _ -> "struct { " ++ intercalate ", " (map (\(n, t) -> n ++ ": " ++ prettyType t) fields) ++ " }"
+  PtrT t Mutable -> "*mut " ++ prettyType t
+  PtrT t _ -> "*" ++ prettyType t
 
 data UnaryOp
   = NegOp
@@ -65,6 +68,7 @@ data BinaryOp
   | SubOp
   | MulOp
   | DivOp
+  | ModOp
   | AndOp
   | OrOp
   | EqOp
@@ -81,6 +85,7 @@ prettyBinaryOp = \case
   SubOp -> "-"
   MulOp -> "*"
   DivOp -> "/"
+  ModOp -> "%"
   AndOp -> "and"
   OrOp -> "or"
   EqOp -> "=="

@@ -1,11 +1,14 @@
 module Pressure.Interpreter.Value where
 
+import Data.IORef
 import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import Pressure.Language.Ast (TypedBlock, TypedParam)
 import Pressure.Language.Types
 
-type ValueEnv = [Map String Value]
+type ValueEnv = [Map String (IORef Value)]
+
+type LValuePath = [String]
 
 data Value
   = VInt Sign IntSize Integer
@@ -19,6 +22,7 @@ data Value
   | VArray [Value]
   | VBuiltin String
   | VStruct [(String, Value)]
+  | VPtr Mutability (IORef Value) LValuePath
   deriving (Eq)
 
 instance Show Value where
@@ -34,4 +38,6 @@ instance Show Value where
     VArray list -> show list
     VBuiltin n -> "<builtin " ++ n ++ ">"
     VStruct fields -> "struct { " ++ intercalate ", " (map (\(n, v) -> n ++ " = " ++ show v) fields) ++ " }"
+    VPtr Mutable _ path -> "&mut " ++ intercalate "." path
+    VPtr Constant _ path -> "&" ++ intercalate "." path
     VEmpty -> undefined

@@ -58,9 +58,9 @@
 
 \<MulExpr> → \<MulExpr> * \<UnaryExpr> | \<MulExpr> / \<UnaryExpr> | \<UnaryExpr>
 
-\<UnaryExpr> → - \<UnaryExpr> | & \<UnaryExpr> | ! \<UnaryExpr> | \<CallExpr>
+\<UnaryExpr> → - \<UnaryExpr> | & \<UnaryExpr> | & mut \<UnaryExpr> | ! \<UnaryExpr> | \<CallExpr>
 
-\<CallExpr> → \<AtomExpr> | \<CallExpr> ( \<Args> )
+\<CallExpr> → \<AtomExpr> | \<CallExpr> ( \<Args> ) | \<CallExpr> [ \<Expr> ] | \<CallExpr> . \<id> | \<CallExpr> . *
 
 \<Args> → \<ArgList> | ε
 
@@ -70,7 +70,9 @@
 
 \<OptType> → \<Type> | ε
 
-\<Type> → \<id> | \<FnType> | \<TypeLit> | \<StructType>
+\<Type> → \<id> | \<FnType> | \<PointerType> | \<TypeLit> | \<StructType>
+
+\<PointerType> → * \<Type> | * mut \<Type>
 
 \<FnType> → fn ( \<FnParamsTypes> ) -> \<Type>
 

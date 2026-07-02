@@ -112,6 +112,7 @@ data TypeSyntaxKind
   | StringSyntax
   | UnitSyntax
   | StructSyntax [StructItem]
+  | PointerSyntax TypeSyntax Mutability
   | TySyntax
   | AnyTypeSyntax
   deriving (Show, Eq)
@@ -136,6 +137,8 @@ data ParsedExprKind
   | ParsedTypeLit TypeSyntax
   | ParsedBinaryExpr BinaryOp ParsedExpr ParsedExpr
   | ParsedUnaryExpr UnaryOp ParsedExpr
+  | ParsedAddrOfExpr Bool ParsedExpr
+  | ParsedDerefExpr ParsedExpr
   | ParsedVarExpr Ident
   | ParsedIfExpr ParsedExpr ParsedBlock (Maybe ParsedBlock)
   | ParsedWhileExpr ParsedExpr ParsedBlock (Maybe ParsedBlock)
@@ -166,6 +169,8 @@ data TypedExprKind
   | TypedTypeLit Type
   | TypedBinaryExpr BinaryOp TypedExpr TypedExpr
   | TypedUnaryExpr UnaryOp TypedExpr
+  | TypedAddrOfExpr Bool TypedExpr
+  | TypedDerefExpr TypedExpr
   | TypedVarExpr Ident
   | TypedIfExpr TypedExpr TypedBlock (Maybe TypedBlock)
   | TypedWhileExpr TypedExpr TypedBlock (Maybe TypedBlock)

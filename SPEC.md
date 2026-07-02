@@ -234,7 +234,7 @@ myArray[0]; // => 1
 
 myArray: []T;
 myArray: [][]T;
-myArray: []#const []#const T;
+myArray: []mut []mut T;
 ```
 
 ### Pointers
@@ -246,5 +246,5 @@ y : *int : &x
 y.* = 42
 // x is now 42
 
-z : *#const int : &x
+z : *mut int : &mut x
 ```
