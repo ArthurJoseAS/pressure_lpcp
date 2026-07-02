@@ -1,10 +1,12 @@
 module Pressure.Language.Parser.ExpressionsTest (parserExpressionTests) where
 
+import Control.Exception (ErrorCall (..), evaluate, try)
+import Data.List (isInfixOf)
 import Pressure.Language.Ast
 import Pressure.Language.Parser.TestUtil
 import Pressure.Language.Types (BinaryOp (..), Mutability (Mutable), UnaryOp (..))
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase)
+import Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
 parserExpressionTests :: TestTree
 parserExpressionTests =
@@ -30,7 +32,10 @@ parserExpressionTests =
       testCase "parses index expression" testParseIndexExpr,
       testCase "parses index on literal" testParseIndexOnLiteral,
       testCase "parses nested array literal" testParseNestedArrayLit,
-      testCase "parses array of strings" testParseArrayOfStrings
+      testCase "parses array of strings" testParseArrayOfStrings,
+      testCase "parses fn param shared type sugar" testParseFnSharedParamType,
+      testCase "parses fn param shared type sugar with reordering" testParseFnSharedParamTypeReordered,
+      testCase "errors on trailing fn param without type" testParseFnMissingTrailingParamType
     ]
 
 testParseAdditionExpr :: IO ()
@@ -212,3 +217,48 @@ testParseArrayOfStrings = do
         _ -> False
     )
     ast
+
+isFloatType :: TypeSyntax -> Bool
+isFloatType (TypeSyntax _ (FloatSyntax _)) = True
+isFloatType _ = False
+
+fnParamNamesAndTypes :: ParsedExpr -> Maybe [(String, TypeSyntax)]
+fnParamNamesAndTypes = \case
+  ParsedExpr _ (ParsedFnExpr params _ _) ->
+    Just [(identName ident, ty) | Param ident ty <- params]
+  _ -> Nothing
+
+testParseFnSharedParamType :: IO ()
+testParseFnSharedParamType = do
+  ast <- parse "parse fn with shared param type sugar" "fn(a, b: int) -> int { a + b };"
+  expect
+    "shared param type sugar"
+    ( case singleExpr ast >>= fnParamNamesAndTypes of
+        Just [("a", tyA), ("b", tyB)] -> isIntType tyA && isIntType tyB
+        _ -> False
+    )
+    ast
+
+testParseFnSharedParamTypeReordered :: IO ()
+testParseFnSharedParamTypeReordered = do
+  ast <- parse "parse fn with reordered shared param types" "fn(a, c: int, b: float) -> int { 0 };"
+  expect
+    "reordered shared param types"
+    ( case singleExpr ast >>= fnParamNamesAndTypes of
+        Just [("a", tyA), ("c", tyC), ("b", tyB)] ->
+          isIntType tyA && isIntType tyC && isFloatType tyB
+        _ -> False
+    )
+    ast
+
+testParseFnMissingTrailingParamType :: IO ()
+testParseFnMissingTrailingParamType = do
+  ast <- parse "parse fn with missing trailing param type" "fn(a: int, b) -> int { a };"
+  result <- try (evaluate (length (show ast))) :: IO (Either ErrorCall Int)
+  case result of
+    Left (ErrorCall msg) ->
+      assertBool
+        ("expected error message to mention missing type, got: " ++ msg)
+        ("missing type" `isInfixOf` msg)
+    Right _ ->
+      assertFailure "expected an error for a trailing parameter without a type, but parsing succeeded"

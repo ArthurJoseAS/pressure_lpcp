@@ -3,6 +3,7 @@ module Pressure.Language.Parser (parseRepl, parseProgram, genAst, parseErrorInfo
 import Pressure.Language.Lexer
 import Pressure.Language.Ast
 import Pressure.Language.Types
+import Data.List (intercalate)
 }
 
 %name parseRepl Repl
@@ -148,17 +149,24 @@ BreakExpr : break        { ParsedExpr (token_posn $1) (ParsedBreakExpr (ParsedEx
 
 ContinueExpr : continue  { ParsedExpr (token_posn $1) ParsedContinueExpr }
 
-FnExpr : fn '(' FnParamList ')' '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 $6 $7) }
-       | fn '(' FnParamList ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr $3 (TypeSyntax (token_posn $1) UnitSyntax) $5) }
+FnExpr : fn '(' FnParams ')' '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr (toExprParams $3) $6 $7) }
+       | fn '(' FnParams ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr (toExprParams $3) (TypeSyntax (token_posn $1) UnitSyntax) $5) }
        | fn UnitLit '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] $4 $5) }
        | fn UnitLit Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] (TypeSyntax (token_posn $1) UnitSyntax) $3) }
        | fn '(' ')' '->' TypeExpr Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] $5 $6) }
        | fn '(' ')' Block { ParsedExpr (token_posn $1) (ParsedFnExpr [] (TypeSyntax (token_posn $1) UnitSyntax) $4) }
 
-FnParamList : FnParam                 { [$1] }
-            | FnParam ',' FnParamList { $1 : $3 }
+FnParams : FnParamItem                    { [$1] }
+         | FnParamItem ',' FnParams { $1 : $3 }
 
-FnParam : ID ':' TypeExpr { Param (toIdent $1) $3 }
+FnParamItem : ID              { ParamOrTypeIdent (toIdent $1) }
+            | ID ':' TypeExpr { ParamOrTypeTyped (toIdent $1) $3 }
+            | TypeExprNoId    { ParamOrTypeBare $1 }
+
+TypeExprNoId : FnType     { $1 }
+             | ArrType    { $1 }
+             | TypeLit    { $1 }
+             | StructType { $1 }
 
 LogicalOrExpr : LogicalOrExpr or LogicalAndExpr { ParsedExpr (token_posn $2) (ParsedBinaryExpr OrOp $1 $3) }
               | LogicalAndExpr                  { $1 }
@@ -232,12 +240,9 @@ TypeExpr : FnType     { $1 }
 TypeLitExpr : FnType  { $1 }
             | TypeLit { $1 }
 
-FnType : fn '(' FnParamsTypesList ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax $3 $6) }
+FnType : fn '(' FnParams ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax (toFnTypeParams $3) $6) }
        | fn UnitLit '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $4) }
        | fn '(' ')' '->' TypeExpr { TypeSyntax (token_posn $1) (FnSyntax [] $5) }
-
-FnParamsTypesList : TypeExpr                       { [$1] }
-                  | TypeExpr ',' FnParamsTypesList { $1 : $3 }
 
 ArrType : '[' ']' TypeExpr {TypeSyntax (token_posn $1) (ArraySyntax $3)}
 
@@ -340,6 +345,36 @@ exprToLValue :: ParsedExpr -> ParsedLValue
 exprToLValue (ParsedExpr _ (ParsedVarExpr ident)) = ParsedLVar ident
 exprToLValue (ParsedExpr _ (ParsedMemberAccess expr ident)) = ParsedLAccess (exprToLValue expr) ident
 exprToLValue (ParsedExpr pos _) = error "invalid l-value"
+
+data ParamOrType
+  = ParamOrTypeIdent Ident               -- bare `a`      (only valid in a FnExpr, pending type)
+  | ParamOrTypeTyped Ident TypeSyntax    -- `a: int`      (only valid in a FnExpr)
+  | ParamOrTypeBare TypeSyntax           -- `[]int`, etc. (only valid in a FnType)
+
+toExprParams :: [ParamOrType] -> [Param]
+toExprParams = go []
+  where
+    go pending [] =
+      case pending of
+        [] -> []
+        _ ->
+          error $
+            "missing type for parameter(s): "
+              ++ intercalate ", " (map identName (reverse pending))
+    go pending (ParamOrTypeTyped ident ty : rest) =
+      [Param i ty | i <- reverse (ident : pending)] ++ go [] rest
+    go pending (ParamOrTypeIdent ident : rest) =
+      go (ident : pending) rest
+    go _ (ParamOrTypeBare ty : _) =
+      error ("expected a named parameter, got a bare type " ++ show ty ++ " in a function expression")
+
+toFnTypeParams :: [ParamOrType] -> [TypeSyntax]
+toFnTypeParams = map go
+  where
+    go (ParamOrTypeIdent (Ident pos name)) = TypeSyntax pos (NameSyntax name)
+    go (ParamOrTypeBare ty) = ty
+    go (ParamOrTypeTyped (Ident _ name) _) =
+      error ("unexpected named parameter '" ++ name ++ "' in a function type")
 
 prependStmt :: ParsedStmt -> ParsedBlock -> ParsedBlock
 prependStmt stmt (Block stmts expr) = Block (stmt : stmts) expr
