@@ -1,0 +1,112 @@
+printmat :: fn(mat:[][]int, m: int, n: int){
+    i := 0;
+    while i < m{
+        @printf("{}\n", mat[i]);
+        i = i + 1;
+    };
+};
+
+matsum :: fn(mat1: [][]int, mat2: [][]int, m: int, n: int) -> [][] int{
+    retmat := [[]];
+    retmat = @pop(retmat[0]);
+    i := 0;
+    while i<m{
+        j:=0;
+        line : [] int = [];
+        while j<n{
+            line = @push(line, mat1[i][j]+mat2[i][j]);
+            j = j + 1;
+        };
+        retmat = @push(retmat, line);
+        i = i + 1;
+    };
+    
+    retmat
+};
+
+matprod :: fn(mat1: [][]int, mat2: [][]int, m1: int, n1: int, n2: int) -> [][] int{
+    retmat := [[]];
+    retmat = @pop(retmat[0]);
+    i := 0;
+    while i<m1{
+        j:=0;
+        line : [] int = [];
+        while j<n2{
+            cel := 0;
+            k := 0;
+            while k<n1{
+                cel = cel + mat1[i][k]*mat2[k][j];
+                k = k + 1;
+            };
+            line = @push(line, cel);
+            j = j + 1;
+        };
+        retmat = @push(retmat, line);
+        i = i + 1;
+    };
+    
+    retmat
+};
+
+main :: fn(){
+    @printf("defina as proporções m, n da matriz 1\n");
+    m1 :: @as(int, @read());
+    n1 :: @as(int, @read());
+    @printf("defina as proporções m, n da matriz 2\n");
+    
+    m2 :: @as(int, @read());
+    n2 :: @as(int, @read());
+    
+    if n1 != m2{
+        @printf("não é possível multiplicar nem somar as matrizes");
+    };
+
+    mat1 : [][]int = [[0]];
+    mat1 = @pop(mat1[0]);
+    
+    @printf("defina os valores da matriz 1\n");
+    i := 0;
+    while i < m1{
+        j := 0;
+        line : []int = [];
+        while j < n1{
+            x :: @as(int, @read());
+            line = @push(line, x);
+            j = j+1;
+        };
+        mat1 = @push(mat1, line);
+        i = i + 1;
+    };
+    @printf("defina os valores da matriz 2\n");
+    mat2 :[][] int = [[0]];
+    mat2 = @pop(mat2[0]);
+    i = 0;
+    while i < m2{
+        j := 0;
+        line : []int = [];
+        while j < n2{
+            x :: @as(int, @read());
+            line = @push(line, x);
+            j = j+1;
+        };
+        mat2 = @push(mat2, line);
+        i = i + 1;
+    };
+    @printf("matriz 1\n");
+    printmat(mat1, m1, n1);
+
+    @printf("matriz 2\n");
+    printmat(mat2, m2, n2);
+    
+    if m1 != m2 or n1 != n2 {
+        @printf("não é possível somar as matrizes.\n");
+    }
+    else{
+        @printf("soma das matrizes\n");
+        printmat(matsum(mat1, mat2, m1, n1), m1, n1);
+    };
+    @printf("produto das matrizes\n");
+    printmat(matprod(mat1, mat2, m1, n1, n2), m1, n2);
+    
+};
+
