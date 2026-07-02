@@ -1,0 +1,15 @@
+mdc :: fn(n: int, m: int, r: *mut int) {
+    if m == 0 {
+        r.* = n;
+    } else {
+        mdc(m, n % m, r);
+    }
+}
+
+main :: fn() {
+    n :: 7;
+    m :: 2;
+    r := 0;
+    mdc(n, m, &mut r);
+    @printf("{}\n", r);
+};
